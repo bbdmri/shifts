@@ -33,6 +33,15 @@
     return o;
   }
   window.google = { script: { run: runner() } };
+  /* Refresh button: fetch the newest copy of the page, then reload. */
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("#refresh"); if (!b || b.disabled) return;
+    b.disabled = true; b.classList.add("spin");
+    var done = false, go = function () { if (done) return; done = true; try { sessionStorage.setItem("bbd.rf", "1"); } catch (e) {} location.reload(); };
+    try { fetch(location.pathname, { cache: "reload" }).then(go, go); } catch (e) { go(); }
+    setTimeout(go, 4000);
+  });
+
   /* iPhone and iPad zoom the page when a field is tapped; this stops it without blocking pinch zoom there. */
   if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) { var vp = document.querySelector('meta[name="viewport"]'); if (vp) vp.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1"); }
 
@@ -567,6 +576,15 @@ input.field::-webkit-calendar-picker-indicator{filter:invert(.8);opacity:.8;curs
 /* ---------- v10: no zoom on focus, bigger touch targets ---------- */
 @media (hover:none){input,select,textarea,label.f .field,label.f textarea,.note-in{font-size:16px!important}.seg.mini button{min-height:36px;padding:0 13px}.btn.sm{min-height:38px}.linkbtn{padding:9px 0;min-height:38px}}
 @supports (-webkit-touch-callout:none){input,select,textarea,label.f .field,label.f textarea,.note-in{font-size:16px!important}}
+
+/* ---------- v11: refresh button, tap a day, summary ---------- */
+.iconbtn.spin svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.week .day,.dayone{cursor:pointer}
+.tiles.sum{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.tiles.sum .tile{box-shadow:none;background:var(--panel2)}
+.tiles.sum .tile b{font-size:24px}
+@media print{.view>.seg{display:none!important}}
 </style>
 </head>
 <body>
@@ -576,6 +594,7 @@ input.field::-webkit-calendar-picker-indicator{filter:invert(.8);opacity:.8;curs
     MR Schedule
   </span>
   <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+  <button class="iconbtn sq" id="refresh" type="button" aria-label="Refresh the schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
   <button class="iconbtn sq" id="theme" type="button" data-act="theme2" aria-label="Switch between light and dark">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
   </button>
@@ -1575,7 +1594,7 @@ function startApp(D) {
       h += '<div class="week">';
       for (var i = 0; i < 5; i++) {
         var d = L.addDays(S.week, i), plan = L.dayPlan(D, X, d), dt = L.parse(d);
-        h += '<article class="card day' + (d === today ? " today" : "") + '" style="--i:' + i + '"><header><h3><button class="dayhead" type="button" data-act="day-open" data-d="' + d + '" aria-label="Open ' + L.fmtDate(d, "long") + '">' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></button></h3>" +
+        h += '<article class="card day' + (d === today ? " today" : "") + '" style="--i:' + i + '" data-act="day-open" data-d="' + d + '"><header><h3><button class="dayhead" type="button" data-act="day-open" data-d="' + d + '" aria-label="Open ' + L.fmtDate(d, "long") + '">' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></button></h3>" +
           (d === today ? chip("Today") : "") + "</header>" + dayBody(plan, S.tech) + "</article>";
       }
       h += "</div>";
@@ -1860,7 +1879,7 @@ function startApp(D) {
   function detailBtn(d, plan) { return plan.hours ? '<button class="btn sm" type="button" data-act="day-open" data-d="' + d + '">Hour by hour</button>' : ""; }
   function dayOne() {
     var d = S.sel, plan = L.dayPlan(D, X, d);
-    return '<article class="card day dayone swipe' + (d === today ? " today" : "") + '"><header><h3>' + L.DAYS[L.dow(d)] + " <span>" + L.fmtDate(d, "md") + "</span></h3>" + (d === today ? chip("Today") : "") + detailBtn(d, plan) + "</header>" + dayBody(plan, S.tech) + "</article>";
+    return '<article class="card day dayone swipe' + (d === today ? " today" : "") + '" data-act="day-open" data-d="' + d + '"><header><h3>' + L.DAYS[L.dow(d)] + " <span>" + L.fmtDate(d, "md") + "</span></h3>" + (d === today ? chip("Today") : "") + detailBtn(d, plan) + "</header>" + dayBody(plan, S.tech) + "</article>";
   }
   function monthSel(first) { var k = first.slice(0, 7), t = wkday(today); return S.sel && S.sel.slice(0, 7) === k ? S.sel : t.slice(0, 7) === k ? t : ""; }
   function monthPanel(d) { var plan = L.dayPlan(D, X, d); return '<section class="card mp"><header><h3>' + L.fmtDate(d, "long") + "</h3>" + detailBtn(d, plan) + "</header>" + dayBody(plan, S.tech) + "</section>"; }
@@ -1936,7 +1955,7 @@ function startApp(D) {
       h += legend + '<div class="week swipe">';
       for (var i = 0; i < 5; i++) {
         var d = L.addDays(S.week, i), plan = L.dayPlan(D, X, d), dt = L.parse(d);
-        h += '<article class="card day' + (d === today ? " today" : "") + '" style="--i:' + i + '"><header><h3><button class="dayhead" type="button" data-act="day-open" data-d="' + d + '" aria-label="Open ' + L.fmtDate(d, "long") + '">' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></button></h3>" +
+        h += '<article class="card day' + (d === today ? " today" : "") + '" style="--i:' + i + '" data-act="day-open" data-d="' + d + '"><header><h3><button class="dayhead" type="button" data-act="day-open" data-d="' + d + '" aria-label="Open ' + L.fmtDate(d, "long") + '">' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></button></h3>" +
           (d === today ? chip("Today") : "") + "</header>" + dayBody(plan, S.tech) + "</article>";
       }
       h += "</div>";
@@ -2342,6 +2361,32 @@ function startApp(D) {
     o.sender = S.who; o.pin = r.pin;
     return { req: o, fn: "submitRequest", send: o };
   }
+
+  /* ---------- v11: management summary, refreshed note ---------- */
+  function fmtH(h) { return h == null ? "–" : h < 1 ? Math.max(1, Math.round(h * 60)) + " min" : h < 48 ? (Math.round(h * 10) / 10) + " h" : (Math.round(h / 24 * 10) / 10) + " days"; }
+  function summaryCard() {
+    var a = S.adminInfo; if (!a) return '<section class="card"><p class="mute">Loading the summary…</p></section>';
+    var st = a.stats; if (!st) return '<section class="card"><p class="empty">The summary is not available right now.</p></section>';
+    function tile(v, label) { return '<div class="tile"><p class="eyebrow">' + label + "</p><b>" + v + "</b></div>"; }
+    function row(k, v) { return "<tr><td>" + k + "</td><td><b>" + v + "</b></td></tr>"; }
+    function col(o, title) {
+      var dec = o.approved + o.denied, pct = dec ? Math.round(o.approved / dec * 100) + "%" : "–";
+      return '<section class="card"><header><h2>' + title + '</h2></header><div class="tiles sum">' + tile(o.total, "Requests") + tile(fmtH(o.median), "Typical wait") + tile(pct, "Approved") + '</div><table class="bxgrid"><tbody>' +
+        row("Time off", o.off) + row("Covers", o.cover) + row("Swaps", o.swap) + row("Shifts added by an admin", o.shift) + row("Approved", o.approved) + row("Denied", o.denied) + row("Cancelled", o.cancelled) + row("Waiting now", o.pending) + row("Average wait for an answer", fmtH(o.avg)) + row("People who sent a request", o.people) + "</tbody></table></section>";
+    }
+    return col(st.d30, "Last 30 days") + col(st.all, "Since launch") + '<p class="note">The wait runs from when a request is sent to when it is approved or denied.</p><div class="noprint"><button class="btn" type="button" data-act="print8">Print summary</button></div>';
+  }
+  VIEWS.admin = function () {
+    if (!S.adminPin) return vAdmin();
+    if (!S.adminInfo && !S.adminAsk) { S.adminAsk = true; adminRefresh(); }
+    var sec = S.asec || "today", pend = feed().filter(function (x) { return x.status === "pending"; }).length;
+    function sb(v, t) { return '<button type="button" data-act="asec" data-v="' + v + '" aria-pressed="' + (sec === v) + '">' + t + "</button>"; }
+    var seg = '<div class="seg" data-thumb role="group" aria-label="Admin section">' + sb("today", "Today" + (pend ? " · " + pend : "")) + sb("edit", "Edit") + sb("set", "Settings") + sb("sum", "Summary") + "</div>";
+    var base = vAdmin(), cut = base.indexOf("</section>") + 10;
+    if (sec === "today") return base.slice(0, cut) + seg + base.slice(cut);
+    return base.slice(0, cut) + seg + (sec === "edit" ? addShiftCard() + weekCard() + closuresCard() : sec === "sum" ? summaryCard() : settingsCard() + hoursCard() + logCard());
+  };
+  try { if (sessionStorage.getItem("bbd.rf")) { sessionStorage.removeItem("bbd.rf"); setTimeout(function () { toast(OFFLINE ? "No connection. Showing the saved copy." : "Refreshed."); }, 1400); } } catch (e) {}
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
   render();
