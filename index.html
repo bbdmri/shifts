@@ -2162,7 +2162,7 @@ function startApp(D) {
     for (i = 0; i < 5; i++) { c.moveTo(Math.round(x0 + i * cw) + .5, top); c.lineTo(Math.round(x0 + i * cw) + .5, y); }
     c.stroke();
     c.fillStyle = COL.mute; c.font = "500 11px " + FM; c.fillText("Updated " + stamp() + " · Subject to change", P, H - 20);
-    c.textAlign = "right"; c.fillText("Latest schedule: bbdmrischedule.github.io", W - P, H - 20); c.textAlign = "left";
+    c.textAlign = "right"; c.fillText("Latest schedule: bbdmri.github.io/shifts", W - P, H - 20); c.textAlign = "left";
     var url = cv.toDataURL("image/png"), file = null;
     try { var bin = atob(url.split(",")[1]), arr = new Uint8Array(bin.length); for (i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); file = new File([arr], "mr-schedule-" + wk + ".png", { type: "image/png" }); } catch (e) {}
     return { url: url, file: file };
@@ -2217,7 +2217,7 @@ function startApp(D) {
     else if (act === "sheet-share") shareSheet();
     else if (act === "sheet-save") saveSheet();
     else if (act === "sheet-copy") copyText(weekText(), "Week copied. Paste it into a message.");
-    else if (act === "print8") { if (noPrint()) toast("To print, open bbdmrischedule.github.io in your browser."); else { try { window.print(); } catch (e) {} } }
+    else if (act === "print8") { if (noPrint()) toast("To print, open bbdmri.github.io/shifts in your browser."); else { try { window.print(); } catch (e) {} } }
   });
 
   /* ---------- v9: calmer re-renders ---------- */
