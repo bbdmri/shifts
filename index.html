@@ -18,21 +18,42 @@
   var API = "https://script.google.com/macros/s/AKfycbxOioSoclyVZ8DA05BPssGGINSnLgtWeUBGIiZw9GbzHVAjsx7IXWuRUfmm2xXtxo_C/exec";
   var qs = new URLSearchParams(location.search), ID = qs.get("id"), KEY = qs.get("k"), DECIDE = !!(ID && KEY);
   function post(fn, args) {
-    return fetch(API, { method: "POST", body: JSON.stringify({ fn: fn, args: args }), headers: { "Content-Type": "text/plain;charset=utf-8" }, credentials: "omit" })
+    return fetch(API, { method: "POST", body: JSON.stringify({ fn: fn, args: args, code: (function () { try { return localStorage.getItem("bbd.code") || ""; } catch (e) { return ""; } })() }), headers: { "Content-Type": "text/plain;charset=utf-8" }, credentials: "omit" })
       .then(function (r) { return r.json(); })
       .then(function (j) { if (!j.ok) throw new Error(j.error || "Request failed"); return j.result; });
   }
   function runner(ok, fail) {
     var o = { withSuccessHandler: function (f) { return runner(f, fail); }, withFailureHandler: function (f) { return runner(ok, f); } };
-    ["getData", "submitRequest", "adminCheck", "adminDecide", "decide", "requestInfo", "changePin", "cancelRequest", "adminAddShift"].forEach(function (fn) {
+    ["getData", "submitRequest", "adminCheck", "adminDecide", "decide", "requestInfo", "changePin", "cancelRequest", "adminAddShift", "submitSwap", "sendFeedback", "adminInfo", "adminSet", "adminSetWeek", "adminClosure"].forEach(function (fn) {
       o[fn] = function () {
         if (DECIDE && fn === "getData") return; /* an approval link shows the decision card, not the schedule */
-        post(fn, [].slice.call(arguments)).then(function (r) { if (ok) ok(r); }, function (e) { if (fail) fail(e); });
+        post(fn, [].slice.call(arguments)).then(function (r) { if (fn === "getData" && r && r.techs) { try { localStorage.setItem("bbd.cache", JSON.stringify({ t: Date.now(), d: r })); } catch (e) {} } if (ok) ok(r); }, function (e) { if (fail) fail(e); });
       };
     });
     return o;
   }
   window.google = { script: { run: runner() } };
+  /* Saved copy, team passcode screen and offline support. */
+  function lockScreen(msg) {
+    var main = document.getElementById("main"), tabs = document.getElementById("tabs");
+    if (tabs) tabs.style.display = "none";
+    main.innerHTML = '<div class="view"><section class="card form" style="max-width:360px"><h2>Team passcode</h2><p class="mute">Enter the passcode your lead gave you. You only do this once on this phone.</p><label class="f" for="tc">Passcode<input id="tc" class="field" autocomplete="off" autocapitalize="off" maxlength="12"></label>' + (msg ? '<p class="err">' + msg + "</p>" : "") + '<div><button class="btn primary" type="button" id="tcgo">Unlock</button></div></section></div>';
+    document.getElementById("tcgo").onclick = function () { var v = document.getElementById("tc").value.trim(); if (!v) return; try { localStorage.setItem("bbd.code", v); } catch (e) {} location.reload(); };
+  }
+  window.__bootFail = function (e) {
+    if (e && e.message === "LOCKED") {
+      var had = false; try { had = !!localStorage.getItem("bbd.code"); localStorage.removeItem("bbd.cache"); } catch (x) {}
+      window.__started = true; lockScreen(had ? "That passcode is not right." : ""); return;
+    }
+    if (window.__started) { if (window.__offline) window.__offline(); return; }
+    var l = document.getElementById("load"); if (l) l.textContent = "Could not load the schedule. Check your connection and reload.";
+  };
+  if (!DECIDE) document.addEventListener("DOMContentLoaded", function () {
+    var c = null; try { c = JSON.parse(localStorage.getItem("bbd.cache") || "null"); } catch (e) {}
+    if (c && c.d && c.d.techs && !window.__started && typeof startApp === "function") { window.__started = true; window.__stale = c.t; startApp(c.d); }
+  });
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {});
+
 
   if (!DECIDE) return;
   document.addEventListener("DOMContentLoaded", function () {
@@ -371,6 +392,47 @@ html.theming::view-transition-new(root){animation:reveal .65s cubic-bezier(.2,.8
 .rows li:nth-child(3){animation-delay:100ms}
 .rows li:nth-child(n+4){animation-delay:150ms}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}
+
+/* ---------- v6: now line, my shift, day view, admin tools, feedback, print ---------- */
+.track s{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--fg);z-index:2;box-shadow:0 0 0 2px rgba(20,29,41,.55)}
+.stamp.off .dot{background:var(--warn);animation:none;box-shadow:none}
+.onnow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:14px;margin-top:-6px}
+.onnow b{font:600 11px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.onnow span{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-weight:600;animation:pop .4s cubic-bezier(.3,1.6,.5,1) backwards}
+.onnow i{width:8px;height:8px;border-radius:50%}
+.onnow .c-mr1 i,.tl-bar.c-mr1{background:var(--mr1)}
+.onnow .c-mr2 i,.tl-bar.c-mr2{background:var(--mr2)}
+.onnow .c-float i,.tl-bar.c-float{background:var(--flt)}
+.onnow .c-ca i,.tl-bar.c-ca{background:var(--ca)}
+.mine{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,var(--accent-soft),transparent 60%),var(--panel)}
+.mine .big{font:800 20px/1.25 var(--f-display)}
+.mine label{font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.mine select{max-width:220px}
+.dayhead{background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;display:flex;gap:8px;align-items:baseline;transition:color .2s}
+.dayhead:hover{color:var(--accent)}
+.dayhead span{font:500 12.5px var(--f-mono);color:var(--mute)}
+.tl{position:relative;min-width:520px;padding-top:4px}
+.tl-axis{position:relative;height:18px;font:500 10.5px var(--f-mono);color:var(--mute)}
+.tl-axis span{position:absolute;transform:translateX(-50%)}
+.tl-axis span:first-child{transform:none}
+.tl-axis span:last-child{transform:translateX(-100%)}
+.tl-body{position:relative;padding:24px 0 6px;background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 20%)}
+.tl-lane{margin-bottom:10px}
+.tl-name{font:600 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin-bottom:4px}
+.tl-row{position:relative;height:34px;margin-bottom:4px}
+.tl-bar{position:absolute;top:0;bottom:0;border-radius:9px;color:#141d29;padding:0 10px;display:flex;align-items:center;gap:8px;overflow:hidden;white-space:nowrap;font-size:13px;transform-origin:left center;animation:grow .6s cubic-bezier(.2,.8,.2,1) backwards}
+.tl-bar span{font:500 11.5px var(--f-mono);opacity:.8}
+.tl-bx{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--bad);z-index:3;pointer-events:none}
+.tl-bx span{position:absolute;top:2px;left:4px;font:600 10.5px var(--f-mono);color:var(--bad);white-space:nowrap;background:var(--panel);padding:0 4px;border-radius:4px}
+.tl-now{position:absolute;top:0;bottom:0;width:2px;background:var(--fg);z-index:4}
+.wk{display:grid;gap:8px}
+.wk-row{display:grid;grid-template-columns:72px repeat(3,minmax(0,1fr));gap:8px;align-items:center}
+.wk-row .field{padding:0 8px;height:38px}
+.note-in{flex:1 1 180px;height:32px;font-size:13px}
+.code{font-size:18px;letter-spacing:.12em;color:var(--accent)}
+.fb textarea{min-height:64px}
+.weeknav .tools{display:flex;gap:8px}
+@media print{:root,:root[data-mode]{--bg:#fff;--panel:#fff;--panel2:#fff;--line:#bbb;--line2:#999;--fg:#111;--mute:#444;--track:#ddd;--mr1:#c79a00;--mr2:#0a7f97;--flt:#5b43c4;--ca:#777;--warn:#a3520a;--bad:#b83227;--accent:#111}body{background:#fff!important}.bar,.actions,.search,.fb,.mine,.onnow,.weeknav .btn,.weeknav .seg,.weeknav .tools,.rows .linkbtn,.shift .btn,.dot,.track s{display:none!important}*{animation:none!important;box-shadow:none!important}.week{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:6px!important}.card{break-inside:avoid;padding:10px!important}main{padding:0!important}h1{font-size:22px!important}}
 </style>
 </head>
 <body>
@@ -415,19 +477,19 @@ html.theming::view-transition-new(root){animation:reveal .65s cubic-bezier(.2,.8
     for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
     return { id: id, name: id };
   }
-  function inRange(x, date) { return date >= x.date && date <= (x.dateTo || x.date); }
+  function inRange(x, date) { return date >= x.date && date <= (x.dateTo || x.date) && (x.repeat !== "weekly" || dow(date) === dow(x.date)); }
 
   /* The schedule for one date: the normal template with approved changes applied. */
   function dayPlan(data, excs, date) {
     var w = dow(date), hrs = data.site.hours[w] || null, closed = null;
     (data.closures || []).forEach(function (c) { if (date >= c.date && date <= (c.dateTo || c.date)) closed = c.name || "Closed"; });
     if (closed) hrs = null;
-    var shifts = (hrs ? data.template[w] || [] : []).map(function (s) {
+    var shifts = (hrs ? templateFor(data, date, w) : []).map(function (s) {
       return { tech: s.tech, start: s.start, end: s.end, scanner: s.scanner || null };
     });
     var open = [], pending = [], off = [];
     var order = { off: 0, shift: 1, cover: 2 };
-    excs.filter(function (x) { return inRange(x, date); })
+    expand(excs).filter(function (x) { return inRange(x, date); })
       .sort(function (a, b) { return order[a.type] - order[b.type]; })
       .forEach(function (x) {
         if (x.status === "pending") { pending.push(x); return; }
@@ -490,6 +552,23 @@ html.theming::view-transition-new(root){animation:reveal .65s cubic-bezier(.2,.8
     return { date: date, hours: hrs, shifts: shifts, open: open, pending: pending, off: off, bx: bx, flags: flags, closed: closed };
   }
 
+  /* The normal week can have dated versions: for each person the rows with the latest "from" on or before the date apply. */
+  function templateFor(data, date, w) {
+    if (!data.rows) return data.template[w] || [];
+    var latest = {};
+    data.rows.forEach(function (r) { var f = r.from || ""; if (f <= date && (latest[r.tech] == null || f > latest[r.tech])) latest[r.tech] = f; });
+    return data.rows.filter(function (r) { return r.day === w && (r.from || "") === latest[r.tech]; });
+  }
+  /* A swap is two covers: B works A's shift on date, A works B's shift on date2. */
+  function expand(excs) {
+    var out = [];
+    excs.forEach(function (x) {
+      if (x.type !== "swap") { out.push(x); return; }
+      out.push({ id: x.id, type: "cover", tech: x.tech, coverBy: x.coverBy, date: x.date, status: x.status, swap: true });
+      out.push({ id: x.id, type: "cover", tech: x.coverBy, coverBy: x.tech, date: x.date2, status: x.status, swap: true });
+    });
+    return out;
+  }
   /* Floats go to the scanner that has nobody during their shift. Then each scanner is checked for gaps. */
   function gaps(list, s, e) {
     var out = [], cur = s;
@@ -536,8 +615,8 @@ html.theming::view-transition-new(root){animation:reveal .65s cubic-bezier(.2,.8
   /* Flags a request would create if it were approved. Run before the email is sent. */
   function checkRequest(data, excs, req) {
     var hyp = excs.concat([Object.assign({}, req, { status: "approved", id: "_request" })]);
-    var out = [], end = req.dateTo || req.date, guard = 0;
-    for (var d = req.date; d <= end && guard < 60; d = addDays(d, 1), guard++) {
+    var sw = req.type === "swap", lo = sw && req.date2 < req.date ? req.date2 : req.date, out = [], end = sw ? (req.date2 > req.date ? req.date2 : req.date) : (req.dateTo || req.date), guard = 0;
+    for (var d = lo; d <= end && guard < 190; d = addDays(d, 1), guard++) {
       var before = dayPlan(data, excs, d).flags.map(function (f) { return f.text; });
       dayPlan(data, hyp, d).flags.forEach(function (f) {
         if (before.indexOf(f.text) < 0) out.push({ date: d, level: f.level, text: f.text });
@@ -549,7 +628,8 @@ html.theming::view-transition-new(root){animation:reveal .65s cubic-bezier(.2,.8
   function describe(data, x) {
     var hrs = x.start == null ? "all day" : fmtRange(x.start, x.end);
     var name = person(data, x.tech).name;
-    if (x.type === "off") return { title: name + " off", detail: hrs };
+    if (x.type === "swap") return { title: name + " and " + person(data, x.coverBy).name + " swap shifts", detail: fmtDate(x.date, "short") + " ↔ " + fmtDate(x.date2, "short") };
+    if (x.type === "off") return { title: name + " off", detail: hrs + (x.repeat === "weekly" ? ", every " + DAYS[dow(x.date)] : "") };
     if (x.type === "cover") return { title: person(data, x.coverBy).name + " covering for " + name, detail: hrs };
     return { title: name + " added", detail: hrs };
   }
@@ -1261,16 +1341,376 @@ function startApp(D) {
     el.appendChild(s); setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 650);
   });
   window.addEventListener("scroll", function () { document.documentElement.classList.toggle("scrolled", window.scrollY > 8); }, { passive: true });
-  window.addEventListener("resize", function () { render(); });
+  window.addEventListener("resize", function () { placePill(); });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { render(); });
+
+  /* ---------- v6: saved copy, now line, my shift, day view, swaps, repeats, admin tools, feedback ---------- */
+  var STALE = window.__stale || null, OFFLINE = false, NOW = null;
+  window.__fresh = function (d) { if (d && d.techs) { D = d; X = D.exceptions; } STALE = null; OFFLINE = false; render(); };
+  window.__offline = function () { OFFLINE = true; render(); };
+  function reload(then) {
+    google.script.run.withSuccessHandler(function (d) { if (d && d.techs) { D = d; X = D.exceptions; STALE = null; OFFLINE = false; } if (then) then(); render(); })
+      .withFailureHandler(function (e) {
+        if (e && e.message === "LOCKED") { try { localStorage.removeItem("bbd.cache"); } catch (x) {} location.reload(); return; }
+        OFFLINE = true; if (then) then(); render();
+      }).getData();
+  }
+  function toast(t) { var el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); el.textContent = t; document.body.appendChild(el); setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2600); }
+  function nowMin() { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+  function scanName(sh) { var g = groupOf(sh); return g === "mr1" || g === "mr2" ? g.toUpperCase() : ""; }
+  function track(start, end) {
+    var span = TR[1] - TR[0], l = Math.max(0, (start - TR[0]) / span * 100), w = Math.min(100 - l, (end - Math.max(start, TR[0])) / span * 100);
+    return '<div class="track"><i style="left:' + l.toFixed(2) + "%;width:" + w.toFixed(2) + '%"></i>' + (NOW != null ? '<s style="left:' + NOW.toFixed(2) + '%"></s>' : "") + "</div>";
+  }
+  function dayBody(plan, filter) {
+    rowN = 0;
+    if (!plan.hours) return '<p class="empty">' + (plan.closed ? "Closed · " + esc(plan.closed) : "Closed") + "</p>";
+    var n = nowMin();
+    NOW = plan.date === today && n >= TR[0] && n <= TR[1] ? (n - TR[0]) / (TR[1] - TR[0]) * 100 : null;
+    var h = filter ? "" : flagsHtml(plan.flags), rows = "";
+    var list = plan.shifts.filter(function (s) { return !filter || s.tech === filter; });
+    GROUPS.forEach(function (g) {
+      var part = list.filter(function (s) { return groupOf(s) === g.id; });
+      if (part.length) rows += (filter ? "" : '<li class="grp g-' + g.id + '"><i></i>' + g.label + "</li>") + part.map(shiftRow).join("");
+    });
+    if (!filter) rows += plan.open.map(function (o) { return openRow(o, plan.date); }).join("");
+    NOW = null;
+    if (rows) h += '<ul class="shifts">' + rows + "</ul>";
+    else h += '<p class="empty">' + (filter ? (plan.off.some(function (o) { return o.tech === filter; }) ? "Off" : "Not scheduled") : "Nobody scheduled") + "</p>";
+    plan.pending.forEach(function (x) {
+      if (filter && x.tech !== filter && x.coverBy !== filter) return;
+      h += '<p class="note">' + chip("Pending", "warn") + " " + esc(L.describe(D, x).title) + "</p>";
+    });
+    return h;
+  }
+  function stampLine() {
+    var t = STALE ? new Date(STALE).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+    if (OFFLINE) return '<p class="stamp off"><span class="dot"></span>Offline. Showing the copy saved ' + (t ? "at " + esc(t) : "earlier") + ".</p>";
+    if (STALE) return '<p class="stamp"><span class="dot"></span>Saved copy from ' + esc(t) + ". Checking for updates…</p>";
+    return '<p class="stamp"><span class="dot"></span>Schedule last updated ' + esc(stamp()) + "</p>";
+  }
+  function onNowLine() {
+    var plan = L.dayPlan(D, X, today), n = nowMin();
+    if (!plan.hours || n < plan.hours[0] || n >= plan.hours[1]) return "";
+    var on = plan.shifts.filter(function (s) { return s.start <= n && s.end > n; });
+    if (!on.length) return '<p class="onnow"><b>On now</b> nobody scheduled</p>';
+    return '<p class="onnow"><b>On now</b>' + on.map(function (s) { var sn = scanName(s); return '<span class="c-' + colorOf(s) + '"><i></i>' + esc(name(s.tech)) + (sn ? " · " + sn : "") + "</span>"; }).join("") + "</p>";
+  }
+  function isPerson(id) { return !!id && D.techs.some(function (t) { return t.id === id; }); }
+  function myCard() {
+    if (!isPerson(S.who)) return '<div class="mine"><label for="who-pick">Show my schedule</label><select id="who-pick" class="field"><option value="">Choose your name</option>' + techOptions("") + "</select></div>";
+    var n = nowMin(), next = null;
+    for (var i = 0; i < 60 && !next; i++) {
+      var d = L.addDays(today, i);
+      L.dayPlan(D, X, d).shifts.forEach(function (s) { if (!next && s.tech === S.who && (i > 0 || s.end > n)) next = { d: d, s: s }; });
+    }
+    var onNow = next && next.d === today && next.s.start <= n, sn = next ? scanName(next.s) : "";
+    return '<div class="mine"><div><p class="eyebrow">' + esc(name(S.who)) + (onNow ? ", you are on now" : ", your next shift") + '</p><p class="big">' +
+      (next ? (next.d === today ? "Today" : L.fmtDate(next.d, "short")) + " · " + L.fmtRange(next.s.start, next.s.end) + (sn ? " · " + sn : "") : "Nothing scheduled in the next 60 days") +
+      '</p></div><div class="btnrow"><button class="btn sm" type="button" data-act="my-month">My month</button><button class="linkbtn" type="button" data-act="who-clear">Not you?</button></div></div>';
+  }
+  function footer() {
+    var f = S.fb || (S.fb = { msg: "", ok: false });
+    return '<section class="card form fb"><header><h2>Feedback</h2></header>' + (f.ok ? "<p>" + esc(f.msg) + "</p>"
+      : '<label class="f" for="fb-text">What should change or be added?<textarea id="fb-text" class="field" rows="2" maxlength="2000"></textarea></label>' + (f.msg ? '<p class="note" role="status">' + esc(f.msg) + "</p>" : "") +
+        '<div><button class="btn" type="button" data-act="fb-send"' + (S.busy ? " disabled" : "") + ">Send feedback</button></div>") + "</section>";
+  }
+  function weekText() {
+    var out = ["MR Schedule, week of " + L.fmtDate(S.week).replace(/^\w+, /, "")];
+    for (var i = 0; i < 5; i++) {
+      var d = L.addDays(S.week, i), p = L.dayPlan(D, X, d);
+      out.push(""); out.push(L.fmtDate(d, "short") + (p.closed ? " (closed: " + p.closed + ")" : ""));
+      p.shifts.forEach(function (s) { var sn = scanName(s); out.push("  " + name(s.tech) + " " + L.fmtRange(s.start, s.end) + (sn ? " " + sn : "")); });
+    }
+    return out.join("\n");
+  }
+  function vHome() {
+    var month = S.mode === "month", ms = S.month || monthStart(today), md = L.parse(ms);
+    var h = '<section class="hero"><p class="eyebrow">' + esc(D.site.name) + " MRI · " + D.scanners.map(function (s) { return esc(s.label); }).join(" · ") +
+      "</p><h1>" + L.fmtDate(today, "long") + "</h1>" + stampLine() + "</section>";
+    h += myCard() + onNowLine();
+    h += '<div class="weeknav"><h2>' + (month ? L.MONTHS[md.getMonth()] + " " + md.getFullYear() : "Week of " + L.fmtDate(S.week).replace(/^\w+, /, "")) +
+      (S.tech ? " · " + esc(name(S.tech)) + ' <button class="linkbtn" type="button" data-act="clear">Show everyone</button>' : "") + "</h2>" +
+      '<div class="seg mini" role="group" aria-label="View"><button type="button" data-act="mode" data-v="week" aria-pressed="' + !month + '">Week</button><button type="button" data-act="mode" data-v="month" aria-pressed="' + month + '">Month</button></div>' +
+      '<button class="btn sm" type="button" data-act="step" data-n="-1" aria-label="Previous">‹</button>' +
+      '<button class="btn sm" type="button" data-act="step" data-n="0">Today</button>' +
+      '<button class="btn sm" type="button" data-act="step" data-n="1" aria-label="Next">›</button></div>';
+    h += '<div class="legend">' + GROUPS.map(function (g) { return '<span><i class="g-' + g.id + '"></i>' + g.label + "</span>"; }).join("") + "</div>";
+    if (month) h += monthGrid(ms);
+    else {
+      h += '<div class="week">';
+      for (var i = 0; i < 5; i++) {
+        var d = L.addDays(S.week, i), plan = L.dayPlan(D, X, d), dt = L.parse(d);
+        h += '<article class="card day' + (d === today ? " today" : "") + '" style="--i:' + i + '"><header><h3><button class="dayhead" type="button" data-act="day-open" data-d="' + d + '" aria-label="Open ' + L.fmtDate(d, "long") + '">' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></button></h3>" +
+          (d === today ? chip("Today") : "") + "</header>" + dayBody(plan, S.tech) + "</article>";
+      }
+      h += "</div>";
+    }
+    h += '<div class="weeknav"><form class="search" id="search" style="flex:1 1 260px"><input id="q" class="field" type="search" placeholder="Find a week or a person, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
+      (month ? "" : '<div class="tools"><button class="btn" type="button" data-act="print">Print</button><button class="btn" type="button" data-act="share">Share</button></div>') + "</div>";
+    if (S.msg) h += '<p class="note" role="status">' + esc(S.msg) + "</p>";
+    h += '<div class="actions">' +
+      '<button class="action" type="button" data-act="go-req" data-kind="off"><span class="ic">' + IC.cal + "</span><span><b>Request time off</b><small>Pick your days and send.</small></span></button>" +
+      '<button class="action" type="button" data-act="go-req" data-kind="cover"><span class="ic">' + IC.swap + "</span><span><b>Cover or swap a shift</b><small>Say who is working for whom.</small></span></button></div>";
+    var f = feed();
+    h += '<section class="card"><header><h2>Upcoming changes</h2></header>' +
+      (f.length ? '<ul class="rows">' + f.map(function (x) { return changeRow(x); }).join("") + "</ul>" : '<p class="empty">None. Everyone is on the normal schedule.</p>') + "</section>";
+    return h + footer();
+  }
+  VIEWS.day = function () {
+    var d = S.day || today, plan = L.dayPlan(D, X, d), span = TR[1] - TR[0];
+    function pct(m) { return Math.max(0, Math.min(100, (m - TR[0]) / span * 100)); }
+    var h = '<section class="hero"><p class="eyebrow">Day view</p><h1>' + L.fmtDate(d, "long") + "</h1></section>" +
+      '<div class="weeknav"><button class="btn sm" type="button" data-act="nav" data-v="home">‹ Week</button><span style="margin-right:auto"></span><button class="btn sm" type="button" data-act="day-step" data-n="-1" aria-label="Previous day">‹</button><button class="btn sm" type="button" data-act="day-step" data-n="1" aria-label="Next day">›</button></div>';
+    if (!plan.hours) return h + '<section class="card"><p class="empty">' + (plan.closed ? "Closed · " + esc(plan.closed) : "Closed") + "</p></section>";
+    h += flagsHtml(plan.flags);
+    var ticks = "", lanes = "";
+    for (var t = TR[0]; t <= TR[1]; t += 180) ticks += '<span style="left:' + pct(t) + '%">' + L.fmtTime(t).replace(" ", "").toLowerCase().replace("m", "") + "</span>";
+    GROUPS.forEach(function (g) {
+      var part = plan.shifts.filter(function (s) { return groupOf(s) === g.id; }); if (!part.length) return;
+      lanes += '<div class="tl-lane"><div class="tl-name">' + g.label + "</div>" + part.map(function (s) {
+        return '<div class="tl-row"><div class="tl-bar c-' + colorOf(s) + '" style="left:' + pct(s.start) + "%;width:" + (pct(s.end) - pct(s.start)) + '%"><b>' + esc(name(s.tech)) + "</b><span>" + L.fmtRange(s.start, s.end) + "</span></div></div>";
+      }).join("") + "</div>";
+    });
+    var marks = plan.bx.map(function (b) { return '<div class="tl-bx" style="left:' + pct(b.time) + '%"><span>BX ' + L.fmtTime(b.time) + "</span></div>"; }).join(""), n = nowMin();
+    if (d === today && n >= TR[0] && n <= TR[1]) marks += '<div class="tl-now" style="left:' + pct(n) + '%"></div>';
+    h += '<section class="card"><div class="scroll"><div class="tl"><div class="tl-axis">' + ticks + '</div><div class="tl-body">' + marks + (lanes || '<p class="empty">Nobody scheduled</p>') + "</div></div></div>";
+    if (plan.bx.length) h += '<ul class="rows">' + plan.bx.map(function (b) {
+      return '<li><div class="t">Biopsy ' + L.fmtTime(b.time) + " · " + esc(D.bx.scanner) + '</div><div class="d">Tech: ' + (b.by.length ? esc(b.by.map(name).join(", ")) : "none") + " · Assistant: " + (b.ca && b.ca.length ? esc(b.ca.map(name).join(", ")) : "none") + "</div></li>";
+    }).join("") + "</ul>";
+    h += "</section>";
+    if (plan.open.length) h += '<section class="card"><header><h2>Needs coverage</h2></header><ul class="shifts">' + plan.open.map(function (o) { return openRow(o, d); }).join("") + "</ul></section>";
+    return h;
+  };
+  function defaults(kind) {
+    var r = { kind: kind, date: nextOpen(L.addDays(today, 1)), dateTo: "", allDay: true, start: "06:00", end: "15:00", dir: "need", other: "", pin: "", date2: "", repeat: false };
+    if (kind === "cover") fitTimes(r);
+    return r;
+  }
+  function vRequest() {
+    if (S.done) {
+      return '<section class="hero"><h1>Request sent</h1></section><section class="card" style="max-width:560px"><p>' + esc(S.done.msg) + "</p>" +
+        (S.done.flags && S.done.flags.length ? '<p class="eyebrow">Sent with this warning</p>' + flagsHtml(S.done.flags.slice(0, 6), true) : "") +
+        '<div><button class="btn primary" type="button" data-act="nav" data-v="home">Back to the schedule</button></div></section>';
+    }
+    var r = S.req || (S.req = defaults("off"));
+    function seg(v, t) { return '<button type="button" data-act="kind" data-v="' + v + '" aria-pressed="' + (r.kind === v) + '">' + t + "</button>"; }
+    function dateF(id, label, v) { return '<label class="f" for="' + id + '">' + label + '<input id="' + id + '" class="field" type="date" min="' + today + '" value="' + (v || "") + '"></label>'; }
+    var h = '<section class="hero"><h1>Send a request</h1></section><section class="card form" style="max-width:560px">';
+    h += '<div class="seg" role="group" aria-label="Request type">' + seg("off", "Time off") + seg("cover", "Cover") + seg("swap", "Swap") + "</div>";
+    h += '<label class="f" for="r-who">Your name<select id="r-who" class="field"><option value="">Choose</option>' + techOptions(S.who) + "</select></label>";
+    if (r.kind === "off") {
+      h += '<div class="fields">' + dateF("r-date", "First day", r.date) + dateF("r-dateTo", r.repeat ? "Repeat until" : "Last day (if more than one)", r.dateTo) + "</div>" +
+        '<label class="check" for="r-allday"><input id="r-allday" type="checkbox"' + (r.allDay ? " checked" : "") + "> All day</label>" +
+        '<label class="check" for="r-repeat"><input id="r-repeat" type="checkbox"' + (r.repeat ? " checked" : "") + "> Repeat every week on this weekday</label>";
+      if (!r.allDay) h += timeFields(r);
+    } else if (r.kind === "cover") {
+      h += '<div class="seg" role="group" aria-label="Who is covering"><button type="button" data-act="dir" data-v="need" aria-pressed="' + (r.dir === "need") + '">Someone covers me</button><button type="button" data-act="dir" data-v="cover" aria-pressed="' + (r.dir === "cover") + '">I cover someone</button></div>' +
+        '<div class="fields"><label class="f" for="r-other">' + (r.dir === "need" ? "Who covers you" : "Whose shift") + '<select id="r-other" class="field"><option value="">Choose</option>' + techOptions(r.other, S.who, true) + "</select></label>" + dateF("r-date", "Date", r.date) + "</div>" + timeFields(r);
+    } else {
+      h += '<label class="f" for="r-other">Swap with<select id="r-other" class="field"><option value="">Choose</option>' + techOptions(r.other, S.who, true) + "</select></label>" +
+        '<div class="fields">' + dateF("r-date", "Your shift they take", r.date) + dateF("r-date2", "Their shift you take", r.date2) + "</div>";
+    }
+    h += '<label class="f" for="r-pin" style="max-width:200px">Your PIN<input id="r-pin" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" value="' + esc(r.pin || "") + '"></label>';
+    return h + '<div id="reqout" class="form"></div></section>';
+  }
+  function reqObj() {
+    var r = S.req, o, s = toMin(r.start), e = toMin(r.end), pinOk = /^\d{4}$/.test(r.pin || "");
+    if (!isPerson(S.who)) return { err: "Choose your name." };
+    if (!r.date) return { err: "Pick a date." };
+    if (r.kind === "swap") {
+      if (!r.other || r.other === S.who) return { err: "Choose who you are swapping with." };
+      if (!r.date2) return { err: "Pick the date of their shift." };
+      if (!pinOk) return { err: "Enter your 4-digit PIN." };
+      return { req: { type: "swap", tech: S.who, coverBy: r.other, date: r.date, date2: r.date2 }, fn: "submitSwap", send: { sender: S.who, pin: r.pin, other: r.other, date: r.date, date2: r.date2 } };
+    }
+    if (r.kind === "off") {
+      if (r.repeat && !r.dateTo) return { err: "Pick the date the repeat ends." };
+      if (r.dateTo && r.dateTo < r.date) return { err: "The last day is before the first day." };
+      if (r.dateTo && L.addDays(r.date, r.repeat ? 183 : 60) < r.dateTo) return { err: r.repeat ? "Keep a repeat to 6 months or less." : "Keep one request to 60 days or less." };
+      o = { type: "off", tech: S.who, date: r.date, dateTo: r.dateTo && r.dateTo !== r.date ? r.dateTo : null, start: null, end: null };
+      if (r.repeat) o.repeat = "weekly";
+      if (!r.allDay) { if (!(e > s)) return { err: "The end time must be after the start time." }; o.start = s; o.end = e; }
+    } else {
+      if (!r.other || r.other === S.who) return { err: "Choose the other person." };
+      if (!(e > s)) return { err: "The end time must be after the start time." };
+      o = { type: "cover", tech: r.dir === "need" ? S.who : r.other, coverBy: r.dir === "need" ? r.other : S.who, date: r.date, dateTo: null, start: s, end: e };
+    }
+    if (!pinOk) return { err: "Enter your 4-digit PIN." };
+    o.sender = S.who; o.pin = r.pin;
+    return { req: o, fn: "submitRequest", send: o };
+  }
+  function updateOut() {
+    var out = $("reqout"); if (!out) return;
+    var res = reqObj(), h = "";
+    function put(html) { if (out.getAttribute("data-h") !== html) { out.innerHTML = html; out.setAttribute("data-h", html); } }
+    if (S.err) h += '<div class="flag bad">' + IC.alert + "<div><b>" + esc(S.err) + "</b></div></div>";
+    if (res.err) { put(h + '<p class="note">' + esc(res.err) + "</p>"); return; }
+    var q = res.req, hyp = { type: q.type, tech: q.tech, coverBy: q.coverBy, date: q.date, dateTo: q.dateTo, date2: q.date2, repeat: q.repeat, start: q.start, end: q.end };
+    var warn = L.checkRequest(D, X, hyp), d = L.describe(D, hyp);
+    if (warn.length) h += '<p class="eyebrow">If this is approved</p>' + flagsHtml(warn.slice(0, 6), true) + (warn.length > 6 ? '<p class="note">and ' + (warn.length - 6) + " more.</p>" : "");
+    if (q.type === "swap") {
+      var a = L.dayPlan(D, X, q.date).shifts.some(function (x) { return x.tech === q.tech; }), b = L.dayPlan(D, X, q.date2).shifts.some(function (x) { return x.tech === q.coverBy; });
+      if (!a || !b) h += '<p class="note">' + chip("Check", "warn") + " " + (!a ? "You have no shift on " + L.fmtDate(q.date, "short") + ". " : "") + (!b ? esc(name(q.coverBy)) + " has no shift on " + L.fmtDate(q.date2, "short") + "." : "") + "</p>";
+    }
+    h += "<p><b>" + esc(d.title) + "</b>, " + esc(d.detail) + (q.type === "swap" ? "" : " · " + L.fmtDate(q.date, "short") + (q.dateTo ? " to " + L.fmtDate(q.dateTo, "short") : "")) + "</p>";
+    h += '<div><button class="btn primary" type="button" data-act="send2"' + (S.busy ? " disabled" : "") + ">" + (S.busy ? "Sending…" : "Send request") + "</button></div>";
+    h += '<p class="note">Nothing changes until ' + (q.type === "off" ? esc(D.approver) + " approves it" : "it is confirmed") + ".</p>";
+    put(h);
+  }
+  function changeRow(x, admin) {
+    var d = L.describe(D, x);
+    var when = x.type === "swap" ? "" : L.fmtDate(x.date, "short") + (x.dateTo && x.dateTo !== x.date ? " to " + L.fmtDate(x.dateTo, "short") : "") + " · ";
+    var acts = admin
+      ? '<div class="btnrow"><input class="field note-in" data-note="' + esc(x.id) + '" placeholder="Note to the requester (optional)" maxlength="300" aria-label="Note to the requester"><button class="btn sm primary" type="button" data-act="decide2" data-id="' + esc(x.id) + '" data-d="approved"' + (S.busy ? " disabled" : "") + '>Approve</button><button class="btn sm" type="button" data-act="decide2" data-id="' + esc(x.id) + '" data-d="denied"' + (S.busy ? " disabled" : "") + ">Deny</button></div>"
+      : x.type !== "shift" && (x.status === "pending" || x.status === "approved") ? '<div><button class="linkbtn" type="button" data-act="cancel-open" data-id="' + esc(x.id) + '">Cancel this request</button></div>' : "";
+    return '<li><div class="t">' + esc(d.title) + " " + statusChip(x) + '</div><div class="d">' + when + esc(d.detail) + "</div>" +
+      (x.waiting ? '<div class="x">' + esc(x.waiting) + "</div>" : "") + acts + "</li>";
+  }
+  function adminRefresh() {
+    if (!S.adminPin) return;
+    google.script.run.withSuccessHandler(function (r) { if (r && r.ok) { S.adminInfo = r; render(); } }).withFailureHandler(function () {}).adminInfo({ pin: S.adminPin });
+  }
+  function msgLine(m) { return m ? '<p class="note" role="status">' + esc(m) + "</p>" : ""; }
+  function settingsCard() {
+    var a = S.adminInfo; if (!a) return '<section class="card"><p class="mute">Loading admin details…</p></section>';
+    return '<section class="card form"><header><h2>Access</h2><span class="mono small mute">Signed in as ' + esc(a.who) + "</span></header>" +
+      '<p>Team passcode: <b class="mono code">' + (a.teamCode ? esc(a.teamCode) : "off") + "</b></p>" +
+      '<div class="fields"><label class="f" for="s-code">New team passcode (blank turns it off)<input id="s-code" class="field" maxlength="12" autocomplete="off" autocapitalize="off"></label><label class="f" for="s-pin">New admin PIN for you<input id="s-pin" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></label></div>' + msgLine(S.setMsg) +
+      '<div class="btnrow"><button class="btn" type="button" data-act="set-code">Save passcode</button><button class="btn" type="button" data-act="set-pin">Change my admin PIN</button></div>' +
+      '<p class="note">Each phone asks for the team passcode once. Second admin: ' + esc(a.admin2 || "not named") + (a.has2 ? "" : " (no PIN yet; add it in the Settings tab)") + ".</p></section>";
+  }
+  function weekRows(tech, date) {
+    var latest = null, out = [null, null, null, null, null];
+    (D.rows || []).forEach(function (r) { var f = r.from || ""; if (r.tech === tech && f <= date && (latest == null || f > latest)) latest = f; });
+    (D.rows || []).forEach(function (r) { if (r.tech === tech && (r.from || "") === latest && r.day >= 1 && r.day <= 5 && !out[r.day - 1]) out[r.day - 1] = r; });
+    return out;
+  }
+  function weekCard() {
+    var w = S.wk || (S.wk = { tech: "", from: today });
+    var h = '<section class="card form"><header><h2>Normal week</h2></header><div class="fields"><label class="f" for="w-tech">Person<select id="w-tech" class="field"><option value="">Choose</option>' + techOptions(w.tech) + '</select></label><label class="f" for="w-from">Starts on<input id="w-from" class="field" type="date" value="' + w.from + '"></label></div>';
+    if (w.tech) {
+      var rows = weekRows(w.tech, w.from || today);
+      h += '<div class="wk">' + ["Mon", "Tue", "Wed", "Thu", "Fri"].map(function (n, i) {
+        var r = rows[i];
+        function o(v, t) { return '<option value="' + v + '"' + (r && String(r.scanner || "") === v ? " selected" : "") + ">" + t + "</option>"; }
+        return '<div class="wk-row"><label class="check" for="w-on' + i + '"><input type="checkbox" id="w-on' + i + '"' + (r ? " checked" : "") + "> " + n + '</label><input class="field" type="time" step="900" id="w-s' + i + '" value="' + toHM(r ? r.start : 360) + '" aria-label="' + n + ' start"><input class="field" type="time" step="900" id="w-e' + i + '" value="' + toHM(r ? r.end : 900) + '" aria-label="' + n + ' end"><select class="field" id="w-c' + i + '" aria-label="' + n + ' scanner">' + o("", "None") + o("MR1", "MR1") + o("MR2", "MR2") + o("Float", "Float") + "</select></div>";
+      }).join("") + "</div>" + msgLine(S.wkMsg) + '<div><button class="btn primary" type="button" data-act="week-save"' + (S.busy ? " disabled" : "") + ">Save normal week</button></div>" +
+        '<p class="note">Weeks before the start date keep the old hours. Untick a day to make it a day off.</p>';
+    }
+    return h + "</section>";
+  }
+  function closuresCard() {
+    var list = (D.closures || []).filter(function (c) { return (c.dateTo || c.date) >= today; });
+    return '<section class="card form"><header><h2>Closed days</h2></header>' + (list.length ? '<ul class="rows">' + list.map(function (c) {
+      return '<li><div class="t">' + esc(c.name) + '</div><div class="d">' + L.fmtDate(c.date, "short") + (c.dateTo ? " to " + L.fmtDate(c.dateTo, "short") : "") + '</div><div><button class="linkbtn" type="button" data-act="clo-del" data-row="' + (+c.row || 0) + '">Remove</button></div></li>';
+    }).join("") + "</ul>" : '<p class="empty">None entered.</p>') +
+      '<div class="fields"><label class="f" for="k-date">First day<input id="k-date" class="field" type="date"></label><label class="f" for="k-to">Last day (optional)<input id="k-to" class="field" type="date"></label><label class="f" for="k-name">Name<input id="k-name" class="field" maxlength="60" placeholder="Thanksgiving"></label></div>' + msgLine(S.cloMsg) +
+      '<div><button class="btn" type="button" data-act="clo-add"' + (S.busy ? " disabled" : "") + ">Add closed day</button></div></section>";
+  }
+  function logCard() {
+    var a = S.adminInfo; if (!a) return "";
+    return '<section class="card"><header><h2>Activity log</h2><span class="mono small mute">latest 50</span></header>' + (a.log && a.log.length
+      ? '<div class="scroll"><table class="bxgrid"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>' + a.log.map(function (r) { return '<tr><td class="mono small">' + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td><td>" + esc(r[2]) + (r[3] ? '<br><span class="small mute">' + esc(r[3]) + "</span>" : "") + "</td></tr>"; }).join("") + "</tbody></table></div>"
+      : '<p class="empty">Nothing logged yet.</p>') + "</section>";
+  }
+  var adminBase6 = VIEWS.admin;
+  VIEWS.admin = function () {
+    var h = adminBase6(); if (!S.adminPin) return h;
+    if (!S.adminInfo && !S.adminAsk) { S.adminAsk = true; adminRefresh(); }
+    return h + weekCard() + closuresCard() + settingsCard() + logCard();
+  };
+  function placePill() {
+    var tb = $("tabs"), pill = tb && tb.querySelector(".pill"), b = tb && tb.querySelector('button[aria-current="page"]');
+    if (pill && b) { pill.style.transform = "translateX(" + b.offsetLeft + "px)"; pill.style.width = b.offsetWidth + "px"; pill.style.opacity = 1; }
+  }
+  function render() {
+    var key = [S.view, S.mode, S.week, S.month, S.tech, !!S.done, !!S.adminPin, S.req && S.req.kind, S.day].join("|");
+    var still = key === lastKey && !S.dir; lastKey = key;
+    var tabs = [["home", "Schedule"], ["request", "Request"], ["admin", "Admin"]], tb = $("tabs");
+    if (!tb.querySelector(".pill")) tb.innerHTML = '<span class="pill"></span>' + tabs.map(function (t) { return '<button type="button" data-act="nav" data-v="' + t[0] + '">' + t[1] + "</button>"; }).join("");
+    var cur = S.view === "pin" ? "request" : S.view === "cancel" || S.view === "day" ? "home" : S.view;
+    [].forEach.call(tb.querySelectorAll("button"), function (b) { if (b.getAttribute("data-v") === cur) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+    placePill();
+    var keepIds = ["fb-text", "q", "s-code", "k-name"], keep = {}, ae = document.activeElement, focusId = ae && keepIds.indexOf(ae.id) >= 0 ? ae.id : "";
+    keepIds.forEach(function (id) { var e = $(id); if (e) keep[id] = e.value; });
+    $("main").innerHTML = '<div class="view' + (still ? " still" : "") + (S.dir ? " dir-" + S.dir : "") + '">' + (VIEWS[S.view] || vHome)() + "</div>";
+    keepIds.forEach(function (id) { var e = $(id); if (e && keep[id] != null) e.value = keep[id]; });
+    if (focusId && $(focusId)) { try { $(focusId).focus(); } catch (e) {} }
+    S.dir = "";
+    if (S.view === "request") updateOut();
+    if (!still && S.view === "admin") countUp();
+  }
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el) return;
+    var act = el.getAttribute("data-act"), pin = S.adminPin;
+    function admin(fn, arg, msgKey, after) { if (S.busy) return; arg.pin = pin; call(fn, arg, function (r) { S[msgKey] = r.ok ? r.msg : r.err; if (after) after(r); adminRefresh(); reload(); }); render(); }
+    if (act === "day-open") { S.day = el.getAttribute("data-d"); go("day"); }
+    else if (act === "day-step") { var n = +el.getAttribute("data-n"), d = S.day || today; do { d = L.addDays(d, n); } while (L.dow(d) === 0 || L.dow(d) === 6); S.day = d; S.dir = n < 0 ? "r" : "l"; render(); }
+    else if (act === "my-month") { S.tech = S.who; S.mode = "month"; S.month = monthStart(today); S.msg = ""; vt(render); }
+    else if (act === "who-clear") { S.who = ""; store.set("who", ""); render(); }
+    else if (act === "print") { try { window.print(); } catch (e) { toast("Printing is not available here."); } }
+    else if (act === "share") {
+      var text = weekText();
+      if (navigator.share) navigator.share({ title: "MR Schedule", text: text }).catch(function () {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast("Week copied. Paste it into a message."); }, function () { toast("Could not copy on this device."); });
+      else toast("Sharing is not available here.");
+    }
+    else if (act === "send2") {
+      var res = reqObj(); if (res.err || S.busy) return;
+      S.err = ""; call(res.fn, res.send, function (r) { if (!r.ok) { S.err = r.err; S.req.pin = ""; render(); return; } S.done = r; S.req = null; reload(); });
+      updateOut();
+    }
+    else if (act === "decide2") {
+      if (S.busy) return;
+      var id = el.getAttribute("data-id"), ni = document.querySelector('[data-note="' + id + '"]');
+      S.err = ""; call("adminDecide", { pin: pin, id: id, decision: el.getAttribute("data-d"), note: ni ? ni.value : "" }, function (r) { if (!r.ok) S.err = r.err; adminRefresh(); reload(); });
+      render();
+    }
+    else if (act === "fb-send") {
+      if (S.busy) return;
+      var tx = ($("fb-text") || {}).value || "", f = S.fb;
+      if (tx.trim().length < 3) { f.msg = "Write a little more first."; render(); return; }
+      call("sendFeedback", { text: tx, who: isPerson(S.who) ? name(S.who) : "" }, function (r) { f.ok = !!r.ok; f.msg = r.ok ? r.msg : r.err; render(); });
+      render();
+    }
+    else if (act === "set-code") { var cv = $("s-code").value.trim(); admin("adminSet", { what: "code", value: cv }, "setMsg", function (r) { if (r.ok) { store.set("code", r.code || ""); $("s-code") && ($("s-code").value = ""); } }); }
+    else if (act === "set-pin") { admin("adminSet", { what: "pin", value: $("s-pin").value }, "setMsg", function (r) { if (r.ok && r.pin) { S.adminPin = r.pin; pin = r.pin; } }); }
+    else if (act === "week-save") {
+      var days = [];
+      for (var i = 0; i < 5; i++) days.push($("w-on" + i).checked ? { start: toMin($("w-s" + i).value), end: toMin($("w-e" + i).value), scanner: $("w-c" + i).value } : null);
+      if (days.some(function (x) { return x && !(x.end > x.start); })) { S.wkMsg = "Each end time must be after its start time."; render(); return; }
+      admin("adminSetWeek", { tech: S.wk.tech, from: $("w-from").value, days: days }, "wkMsg");
+    }
+    else if (act === "clo-add") { admin("adminClosure", { date: $("k-date").value, dateTo: $("k-to").value, name: $("k-name").value }, "cloMsg", function (r) { if (r.ok && $("k-name")) $("k-name").value = ""; }); }
+    else if (act === "clo-del") { admin("adminClosure", { remove: +el.getAttribute("data-row") }, "cloMsg"); }
+  });
+  document.addEventListener("change", function (ev) {
+    var id = ev.target.id;
+    if (id === "who-pick") { S.who = ev.target.value; store.set("who", S.who); render(); }
+    else if (id === "r-repeat") { if (S.req) { S.req.repeat = ev.target.checked; render(); } }
+    else if (id === "w-tech") { S.wk.tech = ev.target.value; S.wkMsg = ""; render(); }
+    else if (id === "w-from") { S.wk.from = ev.target.value; render(); }
+  });
+  setInterval(function () {
+    var tag = (document.activeElement || {}).tagName || "";
+    if ((S.view === "home" || S.view === "day") && !document.hidden && !/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) render();
+  }, 60000);
+  (function () {
+    var qs = new URLSearchParams(location.search), c = qs.get("claim");
+    if (c && isPerson(c) && /^\d{4}-\d{2}-\d{2}$/.test(qs.get("d") || "")) {
+      S.req = { kind: "cover", dir: "cover", other: c, date: qs.get("d"), dateTo: "", allDay: true, start: toHM(+qs.get("s") || 360), end: toHM(+qs.get("e") || 900), pin: "", date2: "", repeat: false };
+      S.view = "request";
+    }
+  })();
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
   render();
 }
 
 google.script.run
-  .withSuccessHandler(function (d) { startApp(d); })
-  .withFailureHandler(function () { document.getElementById("load").textContent = "Could not load the schedule. Reload the page."; })
+  .withSuccessHandler(function (d) { if (!window.__started) { window.__started = true; startApp(d); } else if (window.__fresh) window.__fresh(d); })
+  .withFailureHandler(function (e) { if (window.__bootFail) window.__bootFail(e); })
   .getData();
 </script>
 </body>
