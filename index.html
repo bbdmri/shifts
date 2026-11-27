@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MR Schedule</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#25313f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MR Schedule">
+<script>
+/* This page is hosted outside Google. It talks to the Sheet's script over a plain web request
+   with no Google sign-in, so it loads the same for everyone no matter which accounts are on the phone. */
+(function () {
+  var API = "https://script.google.com/macros/s/AKfycbxOioSoclyVZ8DA05BPssGGINSnLgtWeUBGIiZw9GbzHVAjsx7IXWuRUfmm2xXtxo_C/exec";
+  var qs = new URLSearchParams(location.search), ID = qs.get("id"), KEY = qs.get("k"), DECIDE = !!(ID && KEY);
+  function post(fn, args) {
+    return fetch(API, { method: "POST", body: JSON.stringify({ fn: fn, args: args }), headers: { "Content-Type": "text/plain;charset=utf-8" }, credentials: "omit" })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || "Request failed"); return j.result; });
+  }
+  function runner(ok, fail) {
+    var o = { withSuccessHandler: function (f) { return runner(f, fail); }, withFailureHandler: function (f) { return runner(ok, f); } };
+    ["getData", "submitRequest", "adminCheck", "adminDecide", "decide", "requestInfo"].forEach(function (fn) {
+      o[fn] = function () {
+        if (DECIDE && fn === "getData") return; /* an approval link shows the decision card, not the schedule */
+        post(fn, [].slice.call(arguments)).then(function (r) { if (ok) ok(r); }, function (e) { if (fail) fail(e); });
+      };
+    });
+    return o;
+  }
+  window.google = { script: { run: runner() } };
+
+  if (!DECIDE) return;
+  document.addEventListener("DOMContentLoaded", function () {
+    var main = document.getElementById("main"), tabs = document.getElementById("tabs");
+    if (tabs) tabs.style.display = "none";
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+    function card(h) { main.innerHTML = '<div class="view"><section class="card" style="max-width:480px">' + h + '<div><a class="btn" href="' + esc(location.pathname) + '">Open the schedule</a></div></section></div>'; }
+    function fail() { card("<h2>Could not reach the schedule</h2><p class=\"mute\">Check your connection and reload this page.</p>"); }
+    card('<p class="mute">Loading the request…</p>');
+    post("requestInfo", [ID, KEY]).then(function (r) {
+      if (!r.ok) { card("<h2>Request not found</h2><p class=\"mute\">" + esc(r.err) + "</p>"); return; }
+      var head = "<h2>" + esc(r.what) + '</h2><p class="mute">' + esc(r.when) + "</p>";
+      if (r.status !== "pending") { card(head + "<p>Already " + esc(r.status) + ".</p>"); return; }
+      card(head + '<div class="btnrow" id="dec"><button class="btn primary" type="button" data-d="approved">Approve</button><button class="btn" type="button" data-d="denied">Deny</button></div><p id="decmsg" class="mute"></p>');
+      document.getElementById("dec").addEventListener("click", function (ev) {
+        var d = ev.target.getAttribute("data-d"); if (!d) return;
+        document.getElementById("dec").style.display = "none";
+        document.getElementById("decmsg").textContent = "Saving…";
+        post("decide", [ID, KEY, d]).then(function (x) { document.getElementById("decmsg").textContent = x.ok ? x.msg : x.err; }, fail);
+      });
+    }, fail);
+  });
+})();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+<style>
+/* Layout: sticky bar, one 1080px column, times in mono, each shift drawn on a 6 AM to 9 PM track. */
+/* Palette from the TGH logo: navy #25313f, white, yellow #f7ef7a. Navy is the default look; light is opt-in. */
+:root{
+  --bg:#25313f; --panel:#2c3a4a; --panel2:#334355; --line:#3d4e61; --line2:#51647a;
+  --fg:#ffffff; --mute:#b3bfcc; --accent:#f7ef7a; --accent-soft:rgba(247,239,122,.14);
+  --brand:#f7ef7a; --brand-ink:#25313f; --cta:#f7ef7a; --cta-ink:#25313f; --bar:#f7ef7a;
+  --ok:#7fdba6; --ok-soft:rgba(127,219,166,.14);
+  --warn:#ffa24d; --warn-soft:rgba(255,162,77,.15); --bad:#ff8479; --bad-soft:rgba(255,132,121,.16);
+  --track:#3a4a5c; --shadow:0 18px 50px rgba(0,0,0,.45);
+  --f-display:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --f-body:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-mode="light"]{
+  --bg:#f3f4f6; --panel:#ffffff; --panel2:#f7f8fa; --line:#dde2e8; --line2:#c2cad4;
+  --fg:#25313f; --mute:#5a6675; --accent:#25313f; --accent-soft:rgba(247,239,122,.45);
+  --brand:#f7ef7a; --brand-ink:#25313f; --cta:#f7ef7a; --cta-ink:#25313f; --bar:#25313f;
+  --ok:#1c7a48; --ok-soft:rgba(28,122,72,.10);
+  --warn:#a3520a; --warn-soft:rgba(214,120,20,.13); --bad:#b83227; --bad-soft:rgba(184,50,39,.10);
+  --track:#e4e8ed; --shadow:0 18px 50px rgba(37,49,63,.18); color-scheme:light; }
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:500 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(26px,5vw,40px);line-height:1.1;font-weight:800}
+h2{font-size:18px;font-weight:700}
+h3{font-size:15px;font-weight:600}
+p{margin:0}
+.mute{color:var(--mute)}
+.small{font-size:13px}
+
+/* bar */
+.bar{position:sticky;top:0;z-index:9;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar .wrap{display:flex;align-items:center;gap:10px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font:800 17px var(--f-display);text-decoration:none;color:var(--fg);margin-right:auto}
+.brand svg{width:26px;height:26px}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;overflow-x:auto;max-width:100%;order:3;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{border:0;background:none;cursor:pointer;padding:7px 14px;border-radius:999px;text-decoration:none;color:var(--mute);font-weight:500;font-size:14px;white-space:nowrap;transition:background .2s,color .2s}
+.tabs button[aria-current="page"]{background:var(--brand);color:var(--brand-ink)}
+.tabs button:not([aria-current="page"]):hover{color:var(--fg)}
+@media (min-width:860px){.tabs{order:0}}
+@media (max-width:859px){.tabs{width:100%}.tabs button{flex:1;text-align:center}}
+.iconbtn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:13.5px;font-weight:500;transition:border-color .2s}
+.iconbtn:hover{border-color:var(--line2)}
+.iconbtn svg{width:16px;height:16px}
+.iconbtn.sq{width:36px;padding:0;justify-content:center}
+
+main{padding-block:26px 80px}
+.view{display:flex;flex-direction:column;gap:22px;animation:rise .3s cubic-bezier(.2,.7,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.view{animation:none}*{transition:none!important}}
+
+.hero{display:flex;flex-direction:column;gap:10px}
+.stamp{font:500 12.5px var(--f-mono);color:var(--mute);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px var(--accent-soft);flex:none}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card>header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 14px;border-radius:12px;border:1px dashed var(--line2);background:var(--panel2);font-size:13.5px;color:var(--mute)}
+
+/* chips and flags */
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line2);font:500 11.5px/1.5 var(--f-mono);background:var(--panel2);white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);background:var(--ok-soft)}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warn-soft)}
+.chip.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent);background:var(--bad-soft)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.flag{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;border-left:3px solid}
+.flag.bad{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.flag.warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.flag svg{width:17px;height:17px;flex:none;margin-top:2px}
+.flag b{font-weight:600}
+.flag span{color:var(--fg);font-weight:400}
+
+/* shifts */
+.shifts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.shift{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center}
+.shift .who{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:600;min-width:0}
+.shift .hrs{font:500 12.5px var(--f-mono);color:var(--mute);white-space:nowrap}
+.shift.me .who b{text-decoration:underline;text-decoration-color:var(--brand);text-decoration-thickness:2px;text-underline-offset:4px}
+.track{grid-column:1/-1;position:relative;height:6px;border-radius:3px;background:var(--track)}
+.track i{position:absolute;top:0;bottom:0;border-radius:3px;background:var(--bar)}
+.shift.changed .track i{background:var(--warn)}
+.track u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg);opacity:.45;border-radius:1px}
+.shift.open .who{color:var(--warn)}
+.shift.open .track i{background:repeating-linear-gradient(135deg,var(--warn) 0 4px,transparent 4px 8px);opacity:.9}
+.axis{display:flex;justify-content:space-between;font:500 10.5px var(--f-mono);color:var(--mute);margin-top:-4px}
+.note{font-size:13px;color:var(--mute);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* week */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.field{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);min-width:0}
+.field:focus{border-color:var(--brand);outline:none}
+.search{display:flex;gap:8px;min-width:0}
+.search .field{flex:1}
+.weeknav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.weeknav h2{margin-right:auto}
+.week{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.day{padding:14px;gap:12px}
+.day.today{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.day header h3{display:flex;gap:8px;align-items:baseline}
+.day header h3 span{font:500 12.5px var(--f-mono);color:var(--mute)}
+.day.closed{opacity:.6}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 16px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);font-weight:600;font-size:14px;cursor:pointer;text-decoration:none;color:var(--fg);transition:transform .15s,border-color .2s,background .2s}
+.btn:hover{border-color:var(--brand)}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--cta);border-color:var(--cta);color:var(--cta-ink)}
+.btn.ghost{background:transparent}
+.btn.sm{min-height:32px;padding:0 11px;font-size:13px;border-radius:8px}
+.btn svg{width:17px;height:17px}
+.actions{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.action{display:flex;align-items:center;gap:14px;padding:16px;border-radius:14px;border:1px solid var(--line);background:var(--panel);text-align:left;cursor:pointer;transition:border-color .2s,transform .2s,background .2s}
+.action:hover{border-color:var(--brand);transform:translateY(-2px);background:var(--panel2)}
+.action .ic{width:40px;height:40px;border-radius:10px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;flex:none}
+.action .ic svg{width:20px;height:20px}
+.action b{display:block;font-weight:600}
+.action small{color:var(--mute);font-size:13px}
+
+/* lists */
+.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.rows li{display:grid;grid-template-columns:minmax(0,1fr);gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.day .shift .who{gap:4px 6px}
+.rows li:first-child{border-top:0;padding-top:0}
+.rows li:last-child{padding-bottom:0}
+.rows .t{font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rows .d{font:500 12.5px var(--f-mono);color:var(--mute)}
+.rows .x{grid-column:1/-1;font-size:13px;color:var(--mute)}
+.myweek li{grid-template-columns:92px minmax(0,1fr)}
+.myweek .is-today .d{color:var(--accent)}
+.empty{color:var(--mute);font-size:14px;padding:6px 0}
+
+/* tiles */
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.tile b{font:800 30px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.tile.bad b{color:var(--bad)} .tile.warn b{color:var(--warn)}
+.bxgrid{width:100%;border-collapse:collapse;font-size:14px}
+.bxgrid th{font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--line)}
+.bxgrid td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line)}
+.bxgrid tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto}
+
+/* request form */
+.form{display:grid;gap:14px}
+.seg{display:flex;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px}
+.seg button{flex:1;min-height:38px;border:0;border-radius:9px;background:transparent;font-weight:600;font-size:14px;cursor:pointer;color:var(--mute)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
+.fields{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+label.f{display:flex;flex-direction:column;gap:6px;font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);min-width:0}
+label.f .field,label.f textarea{font:15px var(--f-body);letter-spacing:0;text-transform:none;color:var(--fg);width:100%}
+textarea.field{height:auto;padding:10px 12px;resize:vertical;min-height:64px}
+.check{display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--brand)}
+.mail{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel2)}
+.mail dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px}
+.mail dt{font:500 11px/1.9 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.mail dd{margin:0;overflow-wrap:anywhere}
+.mail textarea{display:block;width:100%;border:0;background:transparent;margin:0;padding:12px 14px;font:13px/1.55 var(--f-mono);resize:none;color:var(--fg)}
+.mail .sel{user-select:all;-webkit-user-select:all}
+.foot{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:13px;color:var(--mute);border-top:1px solid var(--line);padding-top:16px}
+.linkbtn{background:none;border:0;padding:0;color:var(--fg);text-decoration:underline;cursor:pointer;font-size:13px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px;animation:fade .2s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{width:min(400px,100%);background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow);max-height:90vh;overflow:auto}
+.people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.people .btn.wide{grid-column:1/-1}
+.pin{font:600 26px var(--f-mono);letter-spacing:.5em;text-align:center;height:56px;padding-left:.5em}
+.err{color:var(--bad);font-size:13.5px;min-height:1.4em}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;font-weight:500;box-shadow:var(--shadow)}
+
+.btn[disabled]{opacity:.55;cursor:default}
+.load{min-height:50vh;display:grid;place-items:center;color:var(--mute)}
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <span class="brand">
+    <svg viewBox="0 0 26 26" fill="none" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="7" stroke="var(--brand)" stroke-width="1.6"/><path d="M7 10h12M7 14h8M7 18h5" stroke="var(--brand)" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="17" r="2" fill="var(--brand)"/></svg>
+    MR Schedule
+  </span>
+  <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+  <button class="iconbtn sq" id="theme" type="button" data-act="theme" aria-label="Switch between light and dark">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+</div></header>
+<main class="wrap" id="main"><p class="load" id="load">Loading the schedule…</p></main>
+<script>
+/* Pure schedule logic: dates, the template plus exceptions model, coverage rules, search, email text. */
+(function (root) {
+  "use strict";
+  var DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parse(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function addDays(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
+  function dow(s) { return parse(s).getDay(); }
+  function monday(s) { var w = dow(s); return addDays(s, w === 0 ? -6 : 1 - w); }
+  function fmtTime(m) {
+    var h = Math.floor(m / 60), mi = m % 60;
+    return (h % 12 || 12) + (mi ? ":" + pad(mi) : "") + (h >= 12 && h < 24 ? " PM" : " AM");
+  }
+  function fmtRange(s, e) { return fmtTime(s) + " – " + fmtTime(e); }
+  function fmtDate(s, style) {
+    var d = parse(s), day = DAYS[d.getDay()], mon = MONTHS[d.getMonth()];
+    if (style === "long") return day + ", " + mon + " " + d.getDate() + ", " + d.getFullYear();
+    if (style === "short") return day.slice(0, 3) + ", " + mon.slice(0, 3) + " " + d.getDate();
+    if (style === "md") return mon.slice(0, 3) + " " + d.getDate();
+    return day.slice(0, 3) + ", " + mon.slice(0, 3) + " " + d.getDate() + ", " + d.getFullYear();
+  }
+  function person(data, id) {
+    var all = data.techs.concat(data.admins || []);
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return { id: id, name: id };
+  }
+  function inRange(x, date) { return date >= x.date && date <= (x.dateTo || x.date); }
+
+  /* The schedule for one date: the normal template with approved changes applied. */
+  function dayPlan(data, excs, date) {
+    var w = dow(date), hrs = data.site.hours[w] || null;
+    var shifts = (hrs ? data.template[w] || [] : []).map(function (s) {
+      return { tech: s.tech, start: s.start, end: s.end, scanner: s.scanner || null };
+    });
+    var open = [], pending = [], off = [];
+    var order = { off: 0, shift: 1, cover: 2 };
+    excs.filter(function (x) { return inRange(x, date); })
+      .sort(function (a, b) { return order[a.type] - order[b.type]; })
+      .forEach(function (x) {
+        if (x.status === "pending") { pending.push(x); return; }
+        if (x.status !== "approved") return;
+        var s = x.start == null ? 0 : x.start, e = x.end == null ? 1440 : x.end;
+        if (x.type === "shift") {
+          shifts.push({ tech: x.tech, start: s, end: e, scanner: x.scanner || null, changed: true, added: true, exc: x.id });
+          return;
+        }
+        var next = [], taken = [];
+        shifts.forEach(function (sh) {
+          if (sh.tech !== x.tech || sh.end <= s || sh.start >= e) { next.push(sh); return; }
+          taken.push([Math.max(sh.start, s), Math.min(sh.end, e)]);
+          if (sh.start < s) next.push(Object.assign({}, sh, { end: s, changed: true, exc: x.id }));
+          if (sh.end > e) next.push(Object.assign({}, sh, { start: e, changed: true, exc: x.id }));
+        });
+        shifts = next;
+        if (x.type === "off") {
+          taken.forEach(function (t) { open.push({ tech: x.tech, start: t[0], end: t[1], exc: x.id }); });
+          if (taken.length) off.push({ tech: x.tech, allDay: x.start == null, start: s, end: e });
+        }
+        if (x.type === "cover") {
+          if (!taken.length) {
+            /* Covering a shift that approved time off already opened. */
+            var keep = [];
+            open.forEach(function (o) {
+              if (o.tech !== x.tech || o.end <= s || o.start >= e) { keep.push(o); return; }
+              taken.push([Math.max(o.start, s), Math.min(o.end, e)]);
+              if (o.start < s) keep.push(Object.assign({}, o, { end: s }));
+              if (o.end > e) keep.push(Object.assign({}, o, { start: e }));
+            });
+            open = keep;
+          }
+          taken.forEach(function (t) {
+            shifts.push({ tech: x.coverBy, start: t[0], end: t[1], scanner: null, changed: true, coverFor: x.tech, exc: x.id });
+          });
+        }
+      });
+    shifts.sort(function (a, b) { return a.start - b.start || a.end - b.end || (a.tech < b.tech ? -1 : 1); });
+
+    var flags = [], bx = [];
+    if (hrs && data.bx.days.indexOf(w) >= 0) {
+      bx = data.bx.slots.map(function (t) {
+        var by = shifts.filter(function (sh) { return person(data, sh.tech).bx && sh.start <= t && sh.end > t; })
+          .map(function (sh) { return sh.tech; });
+        if (!by.length) flags.push({ level: "bad", text: "No biopsy tech on site for the " + fmtTime(t) + " biopsy" });
+        return { time: t, by: by };
+      });
+    }
+    if (hrs) {
+      var cur = hrs[0];
+      shifts.slice().sort(function (a, b) { return a.start - b.start; }).forEach(function (sh) {
+        if (sh.start > cur) flags.push({ level: "warn", text: "No tech scheduled " + fmtRange(cur, Math.min(sh.start, hrs[1])) });
+        cur = Math.max(cur, sh.end);
+      });
+      if (cur < hrs[1]) flags.push({ level: "warn", text: "No tech scheduled " + fmtRange(cur, hrs[1]) });
+    }
+    return { date: date, hours: hrs, shifts: shifts, open: open, pending: pending, off: off, bx: bx, flags: flags };
+  }
+
+  function upcomingFlags(data, excs, from, days) {
+    var out = [];
+    for (var i = 0; i < days; i++) {
+      var d = addDays(from, i);
+      dayPlan(data, excs, d).flags.forEach(function (f) { out.push({ date: d, level: f.level, text: f.text }); });
+    }
+    return out;
+  }
+
+  /* Flags a request would create if it were approved. Run before the email is sent. */
+  function checkRequest(data, excs, req) {
+    var hyp = excs.concat([Object.assign({}, req, { status: "approved", id: "_request" })]);
+    var out = [], end = req.dateTo || req.date, guard = 0;
+    for (var d = req.date; d <= end && guard < 60; d = addDays(d, 1), guard++) {
+      var before = dayPlan(data, excs, d).flags.map(function (f) { return f.text; });
+      dayPlan(data, hyp, d).flags.forEach(function (f) {
+        if (before.indexOf(f.text) < 0) out.push({ date: d, level: f.level, text: f.text });
+      });
+    }
+    return out;
+  }
+
+  function describe(data, x) {
+    var hrs = x.start == null ? "all day" : fmtRange(x.start, x.end);
+    var name = person(data, x.tech).name;
+    if (x.type === "off") return { title: name + " off", detail: hrs };
+    if (x.type === "cover") return { title: person(data, x.coverBy).name + " covering for " + name, detail: hrs };
+    return { title: name + " added", detail: hrs };
+  }
+
+  function openShifts(data, excs, from) {
+    var out = [];
+    excs.forEach(function (x) {
+      if (x.type !== "off" || x.status !== "approved") return;
+      var end = x.dateTo || x.date, guard = 0;
+      for (var d = x.date < from ? from : x.date; d <= end && guard < 60; d = addDays(d, 1), guard++) {
+        dayPlan(data, excs, d).open.forEach(function (o) {
+          if (o.exc === x.id) out.push({ date: d, tech: o.tech, start: o.start, end: o.end });
+        });
+      }
+    });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.start - b.start; });
+  }
+
+  /* Search box: a tech name, a date, or both. "tracy 3/8/2027", "week of mar 8", "next week". */
+  function parseSearch(q, data, today) {
+    var s = (" " + q.toLowerCase().replace(/[,.]/g, " ") + " "), out = { tech: null, date: null };
+    data.techs.forEach(function (t) { if (s.indexOf(" " + t.name.toLowerCase() + " ") >= 0) out.tech = t.id; });
+    var m;
+    if (/ today /.test(s) || / this week /.test(s)) out.date = today;
+    else if (/ tomorrow /.test(s)) out.date = addDays(today, 1);
+    else if (/ next week /.test(s)) out.date = addDays(today, 7);
+    else if ((m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/))) out.date = m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]);
+    else if ((m = s.match(/(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?/))) {
+      out.date = pick(+m[1] - 1, +m[2], m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : null);
+    } else {
+      for (var i = 0; i < 12; i++) {
+        var re = new RegExp(" (" + MONTHS[i].toLowerCase() + "|" + MONTHS[i].slice(0, 3).toLowerCase() + ")(?: (\\d{1,2})(?:st|nd|rd|th)?)?(?= )");
+        if ((m = s.match(re))) {
+          var yr = s.match(/ (20\d{2}) /);
+          var year = yr ? +yr[1] : (/ next year /.test(s) ? parse(today).getFullYear() + 1 : null);
+          out.date = pick(i, m[2] ? +m[2] : 1, year);
+          break;
+        }
+      }
+    }
+    function pick(mon, day, year) {
+      if (mon < 0 || mon > 11 || day < 1 || day > 31) return null;
+      var t = parse(today), y = year || t.getFullYear();
+      var d = new Date(y, mon, day);
+      /* No year given: use the next time that date comes around. */
+      if (!year && ymd(d) < monday(today)) d = new Date(y + 1, mon, day);
+      return ymd(d);
+    }
+    return out;
+  }
+
+  function buildEmail(data, req) {
+    var owner = person(data, req.tech).name;
+    var dates = fmtDate(req.date) + (req.dateTo && req.dateTo !== req.date ? " to " + fmtDate(req.dateTo) : "");
+    var hrs = req.start == null ? "All day" : fmtRange(req.start, req.end);
+    var ref = [req.type.toUpperCase(), req.tech, req.coverBy || "-", req.date, req.dateTo || req.date,
+      req.start == null ? "all" : req.start + "-" + req.end].join(";");
+    var subject, lines;
+    if (req.type === "off") {
+      subject = "PTO request | " + owner + " | " + dates;
+      lines = ["Request: Time off", "Tech: " + owner, "Dates: " + dates, "Hours: " + hrs];
+    } else {
+      var by = person(data, req.coverBy).name;
+      subject = "Shift cover | " + by + " covering for " + owner + " | " + dates;
+      lines = ["Request: Shift cover", "Shift belongs to: " + owner, "Covered by: " + by, "Date: " + dates, "Hours: " + hrs];
+    }
+    if (req.note) lines.push("Note: " + req.note);
+    var sender = req.sender || req.tech;
+    lines.push("", "Sent by: " + person(data, sender).name, "", "Do not edit below this line.", "REF " + ref);
+    if (req.pin) lines.push("CODE " + signCode(req.pin, sender + "|" + ref));
+    var body = lines.join("\n"), to = data.site.requestEmail, su = encodeURIComponent(subject), bd = encodeURIComponent(body);
+    return {
+      to: to, subject: subject, body: body,
+      gmail: "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(to) + "&su=" + su + "&body=" + bd,
+      outlook: "https://outlook.office.com/mail/deeplink/compose?to=" + encodeURIComponent(to) + "&subject=" + su + "&body=" + bd
+    };
+  }
+
+  /* Check code for a request. The PIN itself never leaves the phone; the hourly inbox check
+     recomputes this from the PIN kept in the private sheet and rejects a request that does not match. */
+  function signCode(pin, msg) {
+    var s = pin + "|" + msg + "|" + pin, a = 2166136261, b = 3339675911;
+    for (var r = 0; r < 500; r++) for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      a ^= c; a = Math.imul(a, 16777619);
+      b = Math.imul(b ^ c, 2246822519); b ^= b >>> 13;
+    }
+    return ("0000000" + (a >>> 0).toString(16)).slice(-8).slice(0, 4).toUpperCase() + ("0000000" + (b >>> 0).toString(16)).slice(-8).slice(0, 4).toUpperCase();
+  }
+
+  /* Clearly marked examples so the prototype shows changes, pending items and a red flag. */
+  function exampleExceptions(today) {
+    var wk = addDays(monday(today), 7);
+    function log(a, b) { return [a ? "Requested " + fmtDate(addDays(today, -3), "md") : null, b].filter(Boolean); }
+    return [
+      { id: "ex1", example: true, type: "off", tech: "bobbi", date: addDays(wk, 2), status: "approved",
+        log: log(true, "Approved by Mark " + fmtDate(addDays(today, -1), "md")) },
+      { id: "ex2", example: true, type: "shift", tech: "johanna", date: addDays(wk, 1), start: 900, end: 1260, status: "approved",
+        log: ["Added by Mark " + fmtDate(addDays(today, -1), "md")] },
+      { id: "ex3", example: true, type: "cover", tech: "jp", coverBy: "kimi", date: addDays(wk, 10), start: 900, end: 1260, status: "pending",
+        waiting: "Waiting for Kimi to confirm", log: log(true) },
+      { id: "ex4", example: true, type: "off", tech: "tracy", date: addDays(wk, 8), status: "pending",
+        waiting: "Waiting for Mark to approve", log: log(true) }
+    ];
+  }
+
+  var api = {
+    DAYS: DAYS, MONTHS: MONTHS, ymd: ymd, parse: parse, addDays: addDays, dow: dow, monday: monday,
+    fmtTime: fmtTime, fmtRange: fmtRange, fmtDate: fmtDate, person: person, dayPlan: dayPlan,
+    upcomingFlags: upcomingFlags, checkRequest: checkRequest, describe: describe, openShifts: openShifts,
+    parseSearch: parseSearch, buildEmail: buildEmail, signCode: signCode, exampleExceptions: exampleExceptions
+  };
+  root.BBDLogic = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<script>
+/* MR Schedule interface for the Google-hosted version. Data and all checks come from the Sheet through google.script.run. */
+function startApp(D) {
+  "use strict";
+  var L = window.BBDLogic, TR = [360, 1260], mem = {};
+  var store = {
+    get: function (k) { try { var v = localStorage.getItem("bbd." + k); return v == null ? (mem[k] || null) : v; } catch (e) { return mem[k] || null; } },
+    set: function (k, v) { mem[k] = v; try { localStorage.setItem("bbd." + k, v); } catch (e) {} }
+  };
+  var today = L.ymd(new Date());
+  function startWeek() { var w = L.dow(today); return L.monday(L.addDays(today, w === 6 ? 2 : w === 0 ? 1 : 0)); }
+  var S = { view: "home", week: startWeek(), tech: "", msg: "", who: store.get("who") || "", adminPin: null, req: null, busy: false, done: null, err: "" };
+  var X = D.exceptions;
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function name(id) { return L.person(D, id).name; }
+  function chip(t, k) { return '<span class="chip' + (k ? " " + k : "") + '">' + esc(t) + "</span>"; }
+  function toMin(v) { var p = (v || "").split(":"); return p.length === 2 ? +p[0] * 60 + +p[1] : NaN; }
+  function toHM(m) { return (m < 600 ? "0" : "") + Math.floor(m / 60) + ":" + (m % 60 < 10 ? "0" : "") + (m % 60); }
+  function nextOpen(from) { var d = from; for (var i = 0; i < 8; i++) { if (D.site.hours[L.dow(d)]) return d; d = L.addDays(d, 1); } return from; }
+  function stamp() {
+    var d = new Date(D.updated); if (isNaN(d)) return "";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+  var IC = {
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+    swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>'
+  };
+
+  /* ---------- server ---------- */
+  function call(fn, arg, done) {
+    S.busy = true;
+    google.script.run.withSuccessHandler(function (r) { S.busy = false; done(r || { ok: false, err: "No answer from the schedule." }); })
+      .withFailureHandler(function () { S.busy = false; done({ ok: false, err: "Could not reach the schedule. Check your connection and try again." }); })[fn](arg);
+  }
+  function reload(then) {
+    google.script.run.withSuccessHandler(function (d) { if (d && d.techs) { D = d; X = D.exceptions; } if (then) then(); render(); })
+      .withFailureHandler(function () { if (then) then(); render(); }).getData();
+  }
+
+  /* ---------- shared pieces ---------- */
+  function track(start, end) {
+    var span = TR[1] - TR[0], l = Math.max(0, (start - TR[0]) / span * 100), w = Math.min(100 - l, (end - Math.max(start, TR[0])) / span * 100);
+    return '<div class="track"><i style="left:' + l.toFixed(2) + "%;width:" + w.toFixed(2) + '%"></i></div>';
+  }
+  function shiftRow(sh) {
+    var c = "";
+    if (sh.scanner) c += chip(sh.scanner);
+    if (sh.coverFor) c += chip("For " + name(sh.coverFor), "ok");
+    else if (sh.changed) c += chip("Changed", "warn");
+    return '<li class="shift' + (sh.tech === S.who ? " me" : "") + (sh.changed ? " changed" : "") + '"><div class="who"><b>' + esc(name(sh.tech)) + "</b>" + c +
+      '</div><div class="hrs">' + L.fmtRange(sh.start, sh.end) + "</div>" + track(sh.start, sh.end) + "</li>";
+  }
+  function openRow(o, date) {
+    return '<li class="shift open"><div class="who">Needs coverage</div><div class="hrs">' + L.fmtRange(o.start, o.end) + "</div>" + track(o.start, o.end) +
+      '<div class="note" style="grid-column:1/-1">' + esc(name(o.tech)) + ' off <button class="btn sm" type="button" data-act="cover" data-tech="' + esc(o.tech) + '" data-date="' + date + '" data-s="' + o.start + '" data-e="' + o.end + '">Cover this shift</button></div></li>';
+  }
+  function flagsHtml(flags, withDate) {
+    return flags.map(function (f) {
+      return '<div class="flag ' + f.level + '">' + IC.alert + "<div><b>" + esc(f.text) + "</b>" + (withDate ? " <span>" + L.fmtDate(f.date, "short") + "</span>" : "") + "</div></div>";
+    }).join("");
+  }
+  function dayBody(plan, filter) {
+    if (!plan.hours) return '<p class="empty">Closed</p>';
+    var h = filter ? "" : flagsHtml(plan.flags);
+    var rows = plan.shifts.filter(function (s) { return !filter || s.tech === filter; }).map(shiftRow).join("");
+    if (!filter) rows += plan.open.map(function (o) { return openRow(o, plan.date); }).join("");
+    if (rows) h += '<ul class="shifts">' + rows + "</ul>";
+    else h += '<p class="empty">' + (filter ? (plan.off.some(function (o) { return o.tech === filter; }) ? "Off" : "Not scheduled") : "Nobody scheduled") + "</p>";
+    plan.pending.forEach(function (x) {
+      if (filter && x.tech !== filter && x.coverBy !== filter) return;
+      h += '<p class="note">' + chip("Pending", "warn") + " " + esc(L.describe(D, x).title) + "</p>";
+    });
+    return h;
+  }
+  function statusChip(x) { return x.status === "approved" ? chip("Approved", "ok") : x.status === "pending" ? chip("Pending", "warn") : chip("Denied", "bad"); }
+  function changeRow(x, admin) {
+    var d = L.describe(D, x);
+    var when = L.fmtDate(x.date, "short") + (x.dateTo && x.dateTo !== x.date ? " to " + L.fmtDate(x.dateTo, "short") : "");
+    return '<li><div class="t">' + esc(d.title) + " " + statusChip(x) + '</div><div class="d">' + when + " · " + esc(d.detail) + "</div>" +
+      (x.waiting ? '<div class="x">' + esc(x.waiting) + "</div>" : "") +
+      (admin ? '<div class="btnrow"><button class="btn sm primary" type="button" data-act="decide" data-id="' + esc(x.id) + '" data-d="approved"' + (S.busy ? " disabled" : "") + '>Approve</button><button class="btn sm" type="button" data-act="decide" data-id="' + esc(x.id) + '" data-d="denied"' + (S.busy ? " disabled" : "") + ">Deny</button></div>" : "") + "</li>";
+  }
+  function feed() {
+    return X.filter(function (x) { return (x.dateTo || x.date) >= today && x.status !== "denied"; }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  }
+  function footer() {
+    var pend = D.techs.filter(function (t) { return t.pending; }).map(function (t) { return "<span><b>" + esc(t.name) + ":</b> " + esc(t.pending) + "</span>"; }).join("");
+    return pend ? '<div class="foot">' + pend + "</div>" : "";
+  }
+
+  /* ---------- Schedule ---------- */
+  function vHome() {
+    var h = '<section class="hero"><p class="eyebrow">' + esc(D.site.name) + " MRI · " + D.scanners.map(function (s) { return esc(s.label); }).join(" · ") +
+      "</p><h1>" + L.fmtDate(today, "long") + '</h1><p class="stamp"><span class="dot"></span>Schedule last updated ' + esc(stamp()) + "</p></section>";
+    h += '<div class="weeknav"><h2>Week of ' + L.fmtDate(S.week).replace(/^\w+, /, "") + (S.tech ? " · " + esc(name(S.tech)) + ' <button class="linkbtn" type="button" data-act="clear">Show everyone</button>' : "") + "</h2>" +
+      '<button class="btn sm" type="button" data-act="wk" data-n="-1" aria-label="Previous week">‹</button>' +
+      '<button class="btn sm" type="button" data-act="wk" data-n="0">This week</button>' +
+      '<button class="btn sm" type="button" data-act="wk" data-n="1" aria-label="Next week">›</button></div><div class="week">';
+    for (var i = 0; i < 5; i++) {
+      var d = L.addDays(S.week, i), plan = L.dayPlan(D, X, d), dt = L.parse(d);
+      h += '<article class="card day' + (d === today ? " today" : "") + '"><header><h3>' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></h3>" +
+        (d === today ? chip("Today") : "") + "</header>" + dayBody(plan, S.tech) + "</article>";
+    }
+    h += "</div>";
+    h += '<form class="search" id="search"><input id="q" class="field" type="search" placeholder="Find a week or a person, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>';
+    if (S.msg) h += '<p class="note" role="status">' + esc(S.msg) + "</p>";
+    h += '<div class="actions">' +
+      '<button class="action" type="button" data-act="go-req" data-kind="off"><span class="ic">' + IC.cal + "</span><span><b>Request time off</b><small>Pick your days and send.</small></span></button>" +
+      '<button class="action" type="button" data-act="go-req" data-kind="cover"><span class="ic">' + IC.swap + "</span><span><b>Report a shift cover</b><small>Say who is working for whom.</small></span></button></div>";
+    var f = feed();
+    h += '<section class="card"><header><h2>Upcoming changes</h2></header>' +
+      (f.length ? '<ul class="rows">' + f.map(function (x) { return changeRow(x); }).join("") + "</ul>" : '<p class="empty">None. Everyone is on the normal schedule.</p>') + "</section>";
+    return h + footer();
+  }
+
+  /* ---------- Request ---------- */
+  function defaults(kind) {
+    var r = { kind: kind, date: nextOpen(L.addDays(today, 1)), dateTo: "", allDay: true, start: "06:00", end: "15:00", dir: "need", other: "", pin: "" };
+    if (kind === "cover") fitTimes(r);
+    return r;
+  }
+  function fitTimes(r) {
+    var owner = r.dir === "need" ? S.who : r.other;
+    if (!owner || !r.date) return;
+    var mine = L.dayPlan(D, X, r.date).shifts.filter(function (s) { return s.tech === owner; });
+    if (mine.length) { r.start = toHM(mine[0].start); r.end = toHM(mine[0].end); }
+  }
+  function techOptions(sel, skip) {
+    return D.techs.filter(function (t) { return t.id !== skip; }).map(function (t) { return '<option value="' + esc(t.id) + '"' + (sel === t.id ? " selected" : "") + ">" + esc(t.name) + "</option>"; }).join("");
+  }
+  function timeFields(r) {
+    return '<div class="fields"><label class="f" for="r-start">From<input id="r-start" class="field" type="time" step="900" value="' + r.start + '"></label>' +
+      '<label class="f" for="r-end">To<input id="r-end" class="field" type="time" step="900" value="' + r.end + '"></label></div>';
+  }
+  function vRequest() {
+    if (S.done) {
+      return '<section class="hero"><h1>Request sent</h1></section><section class="card" style="max-width:560px"><p>' + esc(S.done.msg) + "</p>" +
+        (S.done.flags && S.done.flags.length ? '<p class="eyebrow">Sent with this warning</p>' + flagsHtml(S.done.flags, true) : "") +
+        '<div><button class="btn primary" type="button" data-act="nav" data-v="home">Back to the schedule</button></div></section>';
+    }
+    var r = S.req || (S.req = defaults("off"));
+    var h = '<section class="hero"><h1>Send a request</h1></section><section class="card form" style="max-width:560px">';
+    h += '<div class="seg" role="group" aria-label="Request type"><button type="button" data-act="kind" data-v="off" aria-pressed="' + (r.kind === "off") + '">Time off</button><button type="button" data-act="kind" data-v="cover" aria-pressed="' + (r.kind === "cover") + '">Shift cover</button></div>';
+    h += '<label class="f" for="r-who">Your name<select id="r-who" class="field"><option value="">Choose</option>' + techOptions(S.who) + "</select></label>";
+    if (r.kind === "off") {
+      h += '<div class="fields"><label class="f" for="r-date">First day<input id="r-date" class="field" type="date" min="' + today + '" value="' + r.date + '"></label>' +
+        '<label class="f" for="r-dateTo">Last day (if more than one)<input id="r-dateTo" class="field" type="date" min="' + today + '" value="' + r.dateTo + '"></label></div>' +
+        '<label class="check" for="r-allday"><input id="r-allday" type="checkbox"' + (r.allDay ? " checked" : "") + "> All day</label>";
+      if (!r.allDay) h += timeFields(r);
+    } else {
+      h += '<div class="seg" role="group" aria-label="Who is covering"><button type="button" data-act="dir" data-v="need" aria-pressed="' + (r.dir === "need") + '">Someone covers me</button><button type="button" data-act="dir" data-v="cover" aria-pressed="' + (r.dir === "cover") + '">I cover someone</button></div>' +
+        '<div class="fields"><label class="f" for="r-other">' + (r.dir === "need" ? "Who covers you" : "Whose shift") + '<select id="r-other" class="field"><option value="">Choose</option>' + techOptions(r.other, S.who) + "</select></label>" +
+        '<label class="f" for="r-date">Date<input id="r-date" class="field" type="date" min="' + today + '" value="' + r.date + '"></label></div>' + timeFields(r);
+    }
+    h += '<label class="f" for="r-pin" style="max-width:200px">Your PIN<input id="r-pin" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" value="' + esc(r.pin || "") + '"></label>';
+    return h + '<div id="reqout" class="form"></div></section>';
+  }
+  function reqObj() {
+    var r = S.req, o, s = toMin(r.start), e = toMin(r.end);
+    if (!S.who) return { err: "Choose your name." };
+    if (!r.date) return { err: "Pick a date." };
+    if (r.kind === "off") {
+      if (r.dateTo && r.dateTo < r.date) return { err: "The last day is before the first day." };
+      if (r.dateTo && L.addDays(r.date, 60) < r.dateTo) return { err: "Keep one request to 60 days or less." };
+      o = { type: "off", tech: S.who, date: r.date, dateTo: r.dateTo && r.dateTo !== r.date ? r.dateTo : null, start: null, end: null };
+      if (!r.allDay) { if (!(e > s)) return { err: "The end time must be after the start time." }; o.start = s; o.end = e; }
+    } else {
+      if (!r.other || r.other === S.who) return { err: "Choose the other tech." };
+      if (!(e > s)) return { err: "The end time must be after the start time." };
+      o = { type: "cover", tech: r.dir === "need" ? S.who : r.other, coverBy: r.dir === "need" ? r.other : S.who, date: r.date, dateTo: null, start: s, end: e };
+    }
+    if (!/^\d{4}$/.test(r.pin || "")) return { err: "Enter your 4-digit PIN." };
+    o.sender = S.who; o.pin = r.pin;
+    return { req: o };
+  }
+  function updateOut() {
+    var out = $("reqout"); if (!out) return;
+    var res = reqObj(), h = "";
+    if (S.err) h += '<div class="flag bad">' + IC.alert + "<div><b>" + esc(S.err) + "</b></div></div>";
+    /* Only touch the page when the content changed: leaving the PIN box fires a change event,
+       and rebuilding the Send button at that moment would swallow the tap on it. */
+    function put(html) { if (out.getAttribute("data-h") !== html) { out.innerHTML = html; out.setAttribute("data-h", html); } }
+    if (res.err) { put(h + '<p class="note">' + esc(res.err) + "</p>"); return; }
+    var q = res.req, hyp = { type: q.type, tech: q.tech, coverBy: q.coverBy, date: q.date, dateTo: q.dateTo, start: q.start, end: q.end };
+    var warn = L.checkRequest(D, X, hyp), d = L.describe(D, hyp);
+    if (warn.length) h += '<p class="eyebrow">If this is approved</p>' + flagsHtml(warn, true);
+    h += "<p><b>" + esc(d.title) + "</b>, " + esc(d.detail) + " · " + L.fmtDate(q.date, "short") + (q.dateTo ? " to " + L.fmtDate(q.dateTo, "short") : "") + "</p>";
+    h += '<div><button class="btn primary" type="button" data-act="send"' + (S.busy ? " disabled" : "") + ">" + (S.busy ? "Sending…" : "Send request") + "</button></div>";
+    h += '<p class="note">Nothing changes until ' + (q.type === "off" ? esc(D.approver) + " approves it" : "it is confirmed") + ".</p>";
+    put(h);
+  }
+
+  /* ---------- Admin ---------- */
+  function vAdmin() {
+    var head = '<section class="hero"><p class="eyebrow">' + esc(D.site.name) + ' MRI</p><h1>Admin</h1></section>';
+    if (!S.adminPin) {
+      return head + '<section class="card form" style="max-width:360px"><label class="f" for="a-pin">Admin PIN<input id="a-pin" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></label>' +
+        (S.err ? '<p class="err">' + esc(S.err) + "</p>" : "") + '<div><button class="btn primary" type="button" data-act="admin-in"' + (S.busy ? " disabled" : "") + ">" + (S.busy ? "Checking…" : "Unlock") + "</button></div></section>";
+    }
+    var plan = L.dayPlan(D, X, today), flags = L.upcomingFlags(D, X, today, 14), open = L.openShifts(D, X, today);
+    var pend = feed().filter(function (x) { return x.status === "pending"; });
+    var bad = flags.filter(function (f) { return f.level === "bad"; }).length;
+    var onsite = {}; plan.shifts.forEach(function (s) { onsite[s.tech] = 1; });
+    function tile(n, label, k) { return '<div class="tile ' + (n && k ? k : "") + '"><p class="eyebrow">' + label + "</p><b>" + n + "</b></div>"; }
+    var h = head + '<div class="tiles">' + tile(Object.keys(onsite).length, "Techs today") + tile(bad, "Red flags", "bad") + tile(flags.length - bad, "Coverage gaps", "warn") + tile(pend.length, "Pending", "warn") + tile(open.length, "Open shifts", "warn") + "</div>";
+    if (S.err) h += '<div class="flag bad">' + IC.alert + "<div><b>" + esc(S.err) + "</b></div></div>";
+    h += '<section class="card"><header><h2>Pending requests</h2></header>' + (pend.length ? '<ul class="rows">' + pend.map(function (x) { return changeRow(x, true); }).join("") + "</ul>" : '<p class="empty">Nothing waiting.</p>') + "</section>";
+    h += '<div class="cols"><section class="card"><header><h2>Today</h2>' + (plan.hours ? '<span class="mono small mute">' + L.fmtRange(plan.hours[0], plan.hours[1]) + "</span>" : "") + "</header>" + dayBody(plan, "") + "</section>";
+    h += '<section class="card"><header><h2>Flags, next 14 days</h2></header>' + (flags.length ? flagsHtml(flags, true) : '<p class="empty">No flags.</p>') + "</section></div>";
+    var rows = "";
+    for (var i = 0, n = 0; i < 21 && n < 8; i++) {
+      var d = L.addDays(today, i), p = L.dayPlan(D, X, d);
+      if (!p.bx.length) continue; n++;
+      rows += "<tr><td>" + L.fmtDate(d, "short") + "</td>" + p.bx.map(function (b) { return "<td>" + (b.by.length ? esc(b.by.map(name).join(", ")) : chip("Nobody", "bad")) + "</td>"; }).join("") + "</tr>";
+    }
+    h += '<section class="card"><header><h2>Biopsy coverage</h2><span class="mono small mute">' + esc(D.bx.scanner) + '</span></header><div class="scroll"><table class="bxgrid"><thead><tr><th>Day</th>' +
+      D.bx.slots.map(function (t) { return "<th>" + L.fmtTime(t) + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div></section>";
+    return h;
+  }
+
+  /* ---------- render ---------- */
+  var VIEWS = { home: vHome, request: vRequest, admin: vAdmin };
+  function render() {
+    var tabs = [["home", "Schedule"], ["request", "Request"], ["admin", "Admin"]];
+    $("tabs").innerHTML = tabs.map(function (t) { return '<button type="button" data-act="nav" data-v="' + t[0] + '"' + (S.view === t[0] ? ' aria-current="page"' : "") + ">" + t[1] + "</button>"; }).join("");
+    $("main").innerHTML = '<div class="view">' + (VIEWS[S.view] || vHome)() + "</div>";
+    if (S.view === "request") updateOut();
+  }
+  function go(v) { S.view = v; S.err = ""; if (v !== "request") S.done = null; render(); window.scrollTo(0, 0); }
+
+  /* ---------- events ---------- */
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el) return;
+    var act = el.getAttribute("data-act");
+    if (act === "nav") { if (el.getAttribute("data-v") === "request" && S.done) { S.done = null; S.req = null; } go(el.getAttribute("data-v")); }
+    else if (act === "theme") { var root = document.documentElement, nx = root.getAttribute("data-mode") === "light" ? "dark" : "light"; root.setAttribute("data-mode", nx); store.set("mode", nx); }
+    else if (act === "wk") { var n = +el.getAttribute("data-n"); S.week = n ? L.addDays(S.week, 7 * n) : startWeek(); S.msg = ""; render(); }
+    else if (act === "clear") { S.tech = ""; S.msg = ""; render(); }
+    else if (act === "go-req") { S.req = defaults(el.getAttribute("data-kind")); S.done = null; go("request"); }
+    else if (act === "cover") {
+      S.req = { kind: "cover", dir: "cover", other: el.getAttribute("data-tech"), date: el.getAttribute("data-date"), dateTo: "", allDay: true, start: toHM(+el.getAttribute("data-s")), end: toHM(+el.getAttribute("data-e")), pin: "" };
+      S.done = null; go("request");
+    }
+    else if (act === "kind") { var k = el.getAttribute("data-v"), keep = S.req; S.req = defaults(k); S.req.date = keep.date; S.req.pin = keep.pin || ""; if (k === "cover") fitTimes(S.req); S.err = ""; render(); }
+    else if (act === "dir") { S.req.dir = el.getAttribute("data-v"); fitTimes(S.req); render(); }
+    else if (act === "send") {
+      var res = reqObj(); if (res.err || S.busy) return;
+      S.err = ""; call("submitRequest", res.req, function (r) {
+        if (!r.ok) { S.err = r.err; S.req.pin = ""; render(); return; }
+        S.done = r; S.req = null; reload();
+      });
+      updateOut();
+    }
+    else if (act === "admin-in") {
+      var pin = $("a-pin").value; if (S.busy) return;
+      S.err = ""; call("adminCheck", pin, function (r) { if (r.ok) S.adminPin = pin; else S.err = r.err; render(); });
+      render();
+    }
+    else if (act === "decide") {
+      if (S.busy) return;
+      S.err = ""; call("adminDecide", { pin: S.adminPin, id: el.getAttribute("data-id"), decision: el.getAttribute("data-d") }, function (r) { if (!r.ok) S.err = r.err; reload(); });
+      render();
+    }
+  });
+  document.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (ev.target.id !== "search") return;
+    var q = $("q").value.trim(); if (!q) return;
+    var r = L.parseSearch(q, D, today);
+    if (!r.tech && !r.date) { S.msg = "Could not read “" + q + "”. Try a name, a date like 3/8/2027, or next week."; render(); return; }
+    if (r.tech) S.tech = r.tech;
+    if (r.date) S.week = L.monday(r.date);
+    S.msg = ""; render(); window.scrollTo(0, 0);
+  });
+  function onField(ev) {
+    var id = ev.target.id, v = ev.target.value;
+    if (!S.req || id.indexOf("r-") !== 0) return;
+    if (id === "r-allday") { S.req.allDay = ev.target.checked; render(); return; }
+    if (id === "r-who") { S.who = v; store.set("who", v); if (S.req.kind === "cover") { fitTimes(S.req); render(); } else updateOut(); return; }
+    var key = id.slice(2);
+    S.req[key] = v;
+    if ((key === "date" || key === "other") && S.req.kind === "cover" && ev.type === "change") { fitTimes(S.req); if ($("r-start")) { $("r-start").value = S.req.start; $("r-end").value = S.req.end; } }
+    updateOut();
+  }
+  document.addEventListener("input", onField);
+  document.addEventListener("change", onField);
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Enter" && ev.target.id === "a-pin") { ev.preventDefault(); var b = document.querySelector('[data-act="admin-in"]'); if (b) b.click(); } });
+  /* Keep the schedule fresh while it is on screen. */
+  setInterval(function () { var t = L.ymd(new Date()); if (t !== today) { today = t; S.week = startWeek(); } if (S.view === "home" && !document.hidden) reload(); }, 300000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && S.view === "home") reload(); });
+
+  if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
+  render();
+}
+
+google.script.run
+  .withSuccessHandler(function (d) { startApp(d); })
+  .withFailureHandler(function () { document.getElementById("load").textContent = "Could not load the schedule. Reload the page."; })
+  .getData();
+</script>
+</body>
+</html>
