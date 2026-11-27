@@ -945,7 +945,7 @@ function startApp(D) {
         (d === today ? chip("Today") : "") + "</header>" + dayBody(plan, S.tech) + "</article>";
     }
     h += "</div>";
-    h += '<form class="search" id="search"><input id="q" class="field" type="search" placeholder="Find a week or a person, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>';
+    h += '<form class="search" id="search"><input id="q" class="field" type="search" placeholder="Find a week or a person, like JP 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>';
     if (S.msg) h += '<p class="note" role="status">' + esc(S.msg) + "</p>";
     h += '<div class="actions">' +
       '<button class="action" type="button" data-act="go-req" data-kind="off"><span class="ic">' + IC.cal + "</span><span><b>Request time off</b><small>Pick your days and send.</small></span></button>" +
@@ -1213,7 +1213,7 @@ function startApp(D) {
       }
       h += "</div>";
     }
-    h += '<form class="search" id="search"><input id="q" class="field" type="search" placeholder="Find a week or a person, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>';
+    h += '<form class="search" id="search"><input id="q" class="field" type="search" placeholder="Find a week or a person, like JP 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>';
     if (S.msg) h += '<p class="note" role="status">' + esc(S.msg) + "</p>";
     h += '<div class="actions">' +
       '<button class="action" type="button" data-act="go-req" data-kind="off"><span class="ic">' + IC.cal + "</span><span><b>Request time off</b><small>Pick your days and send.</small></span></button>" +
@@ -1537,7 +1537,7 @@ function startApp(D) {
       }
       h += "</div>";
     }
-    h += '<div class="weeknav"><form class="search" id="search" style="flex:1 1 260px"><input id="q" class="field" type="search" placeholder="Find a week or a person, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
+    h += '<div class="weeknav"><form class="search" id="search" style="flex:1 1 260px"><input id="q" class="field" type="search" placeholder="Find a week or a person, like JP 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
       (month ? "" : '<div class="tools"><button class="btn" type="button" data-act="print">Print</button><button class="btn" type="button" data-act="share">Share</button></div>') + "</div>";
     if (S.msg) h += '<p class="note" role="status">' + esc(S.msg) + "</p>";
     h += '<div class="actions">' +
@@ -1863,7 +1863,7 @@ function startApp(D) {
   }
   function moreCard() {
     return '<section class="card tight"><button class="disc" type="button" data-act="fold" data-k="more" aria-expanded="' + !!S.more + '" aria-controls="fold-more"><span><b>More</b><small>Search, print, share</small></span>' + CHEV +
-      '</button><div class="fold' + (S.more ? " open" : "") + '" id="fold-more"><div><div class="in"><form class="search" id="search"><input id="q" class="field" type="search" placeholder="A name or a date, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
+      '</button><div class="fold' + (S.more ? " open" : "") + '" id="fold-more"><div><div class="in"><form class="search" id="search"><input id="q" class="field" type="search" placeholder="A name or a date, like JP 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="print7">Print the week</button><button class="btn" type="button" data-act="share">Share the week</button></div></div></div></div></section>';
   }
   function footer() {
@@ -2120,7 +2120,7 @@ function startApp(D) {
   };
   function moreCard() {
     return '<section class="card tight"><button class="disc" type="button" data-act="fold" data-k="more" aria-expanded="' + !!S.more + '" aria-controls="fold-more"><span><b>More</b><small>Search, print, share</small></span>' + CHEV +
-      '</button><div class="fold' + (S.more ? " open" : "") + '" id="fold-more"><div><div class="in"><form class="search" id="search"><input id="q" class="field" type="search" placeholder="A name or a date, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
+      '</button><div class="fold' + (S.more ? " open" : "") + '" id="fold-more"><div><div class="in"><form class="search" id="search"><input id="q" class="field" type="search" placeholder="A name or a date, like JP 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
       '<div class="btnrow"><button class="btn primary" type="button" data-act="sheet-open">Print or share the week</button></div></div></div></div></section>';
   }
   function copyText(t, msg) {
