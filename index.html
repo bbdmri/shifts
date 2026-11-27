@@ -20,7 +20,7 @@
   }
   function runner(ok, fail) {
     var o = { withSuccessHandler: function (f) { return runner(f, fail); }, withFailureHandler: function (f) { return runner(ok, f); } };
-    ["getData", "submitRequest", "adminCheck", "adminDecide", "decide", "requestInfo"].forEach(function (fn) {
+    ["getData", "submitRequest", "adminCheck", "adminDecide", "decide", "requestInfo", "changePin"].forEach(function (fn) {
       o[fn] = function () {
         if (DECIDE && fn === "getData") return; /* an approval link shows the decision card, not the schedule */
         post(fn, [].slice.call(arguments)).then(function (r) { if (ok) ok(r); }, function (e) { if (fail) fail(e); });
@@ -969,6 +969,34 @@ function startApp(D) {
     }
   });
   document.addEventListener("submit", function (ev) { if (ev.target.id === "search" && S.mode === "month") { S.month = monthStart(S.week); render(); } });
+
+  /* ---------- v4: change your own PIN ---------- */
+  VIEWS.request = function () { var h = vRequest(); return S.done ? h : h + '<p class="note"><button class="linkbtn" type="button" data-act="pin-open">Change your PIN</button></p>'; };
+  VIEWS.pin = function () {
+    var p = S.pinForm || (S.pinForm = { msg: "", ok: false });
+    var h = '<section class="hero"><h1>Change your PIN</h1></section><section class="card form" style="max-width:420px">';
+    if (p.ok) return h + "<p>" + esc(p.msg) + '</p><div><button class="btn primary" type="button" data-act="nav" data-v="request">Back to requests</button></div></section>';
+    function inp(id, label) { return '<label class="f" for="' + id + '" style="max-width:200px">' + label + '<input id="' + id + '" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></label>'; }
+    h += '<label class="f" for="p-who">Your name<select id="p-who" class="field"><option value="">Choose</option>' + techOptions(S.who) + "</select></label>";
+    h += inp("p-cur", "Current PIN") + inp("p-new", "New PIN") + inp("p-new2", "Repeat new PIN");
+    if (p.msg) h += '<div class="flag bad">' + IC.alert + "<div><b>" + esc(p.msg) + "</b></div></div>";
+    h += '<div class="btnrow"><button class="btn primary" type="button" data-act="pin-save"' + (S.busy ? " disabled" : "") + ">" + (S.busy ? "Saving…" : "Change PIN") + '</button><button class="btn" type="button" data-act="nav" data-v="request">Cancel</button></div>';
+    return h + '<p class="note">Forgot your PIN? Ask ' + esc(D.approver) + " or your lead to reset it.</p></section>";
+  };
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el) return;
+    var act = el.getAttribute("data-act");
+    if (act === "pin-open") { S.pinForm = { msg: "", ok: false }; go("pin"); }
+    else if (act === "pin-save") {
+      if (S.busy) return;
+      var who = $("p-who").value, cur = $("p-cur").value, n1 = $("p-new").value, n2 = $("p-new2").value, p = S.pinForm;
+      if (who) { S.who = who; store.set("who", who); }
+      p.msg = !who ? "Choose your name." : !/^\d{4}$/.test(cur) ? "Enter your current 4-digit PIN." : !/^\d{4}$/.test(n1) ? "The new PIN must be 4 digits." : n1 !== n2 ? "The two new PINs do not match." : "";
+      if (p.msg) { render(); return; }
+      call("changePin", { who: who, pin: cur, newPin: n1 }, function (r) { p.ok = !!r.ok; p.msg = r.ok ? r.msg : r.err; render(); });
+      render();
+    }
+  });
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
   render();
