@@ -516,6 +516,14 @@ body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none
 @media (hover:hover){.week .day:hover,.tile:hover{transform:translateY(-3px);border-color:var(--line2)}.btn.primary:hover{filter:brightness(1.07)}}
 @media (prefers-reduced-motion:reduce){body::before,.hero h1{animation:none}}
 @media print{body::before,.strip,.card.tight,.wel,.helpbar,.msum{display:none!important}.hero h1{-webkit-text-fill-color:#111;background:none}}
+
+/* ---------- v8: printable week sheet ---------- */
+.paper{background:#fff;border-radius:14px;padding:10px;box-shadow:0 24px 70px rgba(0,0,0,.45);transform-origin:50% 0;animation:paperIn .7s cubic-bezier(.2,1.1,.3,1) both!important}
+.paper img{display:block;width:100%;height:auto;border-radius:6px}
+.paper pre{color:#111;margin:0;padding:12px;white-space:pre-wrap;font:500 13px var(--f-mono)}
+@keyframes paperIn{from{opacity:0;transform:perspective(900px) rotateX(14deg) translateY(30px) scale(.96)}}
+.view.still .paper{animation:none!important}
+@media print{.noprint,.toast{display:none!important}.paper{padding:0;border-radius:0;box-shadow:none;animation:none!important}.paper img{border-radius:0;width:100%;max-height:96vh;object-fit:contain}main,.wrap{padding:0!important;max-width:none!important}}
 </style>
 </head>
 <body>
@@ -1899,7 +1907,7 @@ function startApp(D) {
     var mark = String(D.approver || "your lead").split(" ")[0];
     function card(t, body) { return '<section class="card"><header><h2>' + t + "</h2></header>" + body + "</section>"; }
     return '<div class="help" style="display:contents"><section class="hero"><p class="eyebrow">MR Schedule</p><h1>How this works</h1></section>' +
-      '<div class="weeknav"><button class="btn sm" type="button" data-act="nav" data-v="home">‹ Schedule</button><span style="margin-right:auto"></span><button class="btn sm" type="button" data-act="print7">Print</button></div>' +
+      '<div class="weeknav"><button class="btn sm" type="button" data-act="nav" data-v="home">‹ Schedule</button><span style="margin-right:auto"></span><button class="btn sm" type="button" data-act="print8">Print</button></div>' +
       card("Reading the schedule", '<ul class="keys"><li><i style="background:var(--mr1)"></i>MR1</li><li><i style="background:var(--mr2)"></i>MR2</li><li><i style="background:var(--flt)"></i>Flex: covers whichever scanner needs a tech</li><li><i style="background:var(--ca)"></i>Clinical assistants</li><li><i style="background:var(--bad)"></i>Red: a BX has no biopsy tech or no assistant</li><li><i style="background:var(--warn)"></i>Amber: a scanner has no tech for part of the day</li></ul>') +
       card("Day, Week, Month", "<p>Day shows one day at a time. Tap Mon to Fri, or swipe left and right. Week is the same layout as the paper schedule. Month shows who is on each day. Tap any day for details, and Hour by hour for the timeline with BX times.</p>") +
       card("Your schedule", "<p>Pick your name once at the top. The app then shows your next shift, and My month shows only your days.</p>") +
@@ -1934,7 +1942,7 @@ function startApp(D) {
     var still = key === lastKey && !S.dir; lastKey = key;
     var tabs = [["home", "Schedule"], ["request", "Request"], ["admin", "Admin"]], tb = $("tabs");
     if (!tb.querySelector(".pill")) tb.innerHTML = '<span class="pill"></span>' + tabs.map(function (t) { return '<button type="button" data-act="nav" data-v="' + t[0] + '">' + t[1] + "</button>"; }).join("");
-    var cur = S.view === "pin" ? "request" : S.view === "cancel" || S.view === "day" || S.view === "help" ? "home" : S.view;
+    var cur = S.view === "pin" ? "request" : S.view === "cancel" || S.view === "day" || S.view === "help" || S.view === "sheet" ? "home" : S.view;
     [].forEach.call(tb.querySelectorAll("button"), function (b) { if (b.getAttribute("data-v") === cur) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
     placePill();
     var keepIds = ["fb-text", "q", "s-code", "k-name"], keep = {}, ae = document.activeElement, focusId = ae && keepIds.indexOf(ae.id) >= 0 ? ae.id : "";
@@ -2019,6 +2027,136 @@ function startApp(D) {
   });
   window.addEventListener("resize", function () { placeThumbs(false); });
   setTimeout(welcome, 700);
+
+  /* ---------- v8: printable week sheet (one picture used for print, share and save) ---------- */
+  function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  function fitText(c, t, w) { t = String(t); if (c.measureText(t).width <= w) return t; while (t.length > 1 && c.measureText(t + "…").width > w) t = t.slice(0, -1); return t + "…"; }
+  function buildSheet(wk) {
+    var W = 1100, P = 36, LW = 132, SC = 2, cw = (W - 2 * P - LW) / 5, i;
+    var cs = getComputedStyle(document.documentElement), FD = (cs.getPropertyValue("--f-display") || "").trim() || "sans-serif", FM = (cs.getPropertyValue("--f-mono") || "").trim() || "monospace";
+    var COL = { mr1: "#e2ad00", mr2: "#0c9ab6", float: "#6d52e0", ca: "#7a8696", bx: "#141d29", notes: "#9aa6b5", navy: "#141d29", ink: "#1b2633", mute: "#5a6675", line: "#d9e0e8", soft: "#eef2f7", yel: "#ffd61f", bad: "#c0392b" };
+    var rows = [{ id: "mr1", label: "MR1" }, { id: "mr2", label: "MR2" }, { id: "float", label: "Flex" }, { id: "ca", label: "Assistants" }, { id: "bx", label: "BX · " + D.bx.scanner }, { id: "notes", label: "Off / open" }], days = [];
+    for (i = 0; i < 5; i++) { var dd = L.addDays(wk, i); days.push({ d: dd, p: L.dayPlan(D, X, dd) }); }
+    rows.forEach(function (r) {
+      r.cells = days.map(function (o) {
+        var p = o.p, out = [], seen = {};
+        if (r.id === "bx") p.bx.forEach(function (b) { var ok = b.by.length && b.ca && b.ca.length; out.push({ color: ok ? COL.navy : COL.bad, bad: !ok, main: L.fmtTime(b.time), subs: ["Tech: " + (b.by.length ? b.by.map(name).join(", ") : "NONE"), "Asst: " + (b.ca && b.ca.length ? b.ca.map(name).join(", ") : "NONE")] }); });
+        else if (r.id === "notes") {
+          if (!p.hours) out.push({ color: COL.mute, main: "Closed", subs: p.closed ? [p.closed] : [] });
+          p.off.forEach(function (x) { if (seen[x.tech]) return; seen[x.tech] = 1; out.push({ color: COL.notes, main: name(x.tech) + " off", subs: [] }); });
+          p.open.forEach(function (x) { out.push({ color: COL.bad, bad: true, main: "Open shift", subs: [L.fmtRange(x.start, x.end)] }); });
+        } else p.shifts.forEach(function (s) {
+          if (groupOf(s) !== r.id) return;
+          var sub = [L.fmtRange(s.start, s.end)]; if (s.coverFor) sub.push("for " + name(s.coverFor)); else if (s.float && r.id !== "float") sub.push("Flex");
+          out.push({ color: COL[colorOf(s)] || COL.ca, main: name(s.tech), subs: sub });
+        });
+        return out;
+      });
+      r.h = 0;
+      r.cells.forEach(function (c) { var h = 0; c.forEach(function (e) { e.h = 27 + 17 * e.subs.length + 9; h += e.h; }); r.h = Math.max(r.h, h); });
+    });
+    rows = rows.filter(function (r) { return r.h > 0; });
+    var HEAD = 118, DH = 46, FOOT = 46, need = HEAD + 19 + DH + FOOT, H = Math.round(W * 8.5 / 11);
+    rows.forEach(function (r) { r.h += 20; need += r.h; });
+    if (need < H && rows.length) rows.forEach(function (r) { r.h += (H - need) / rows.length; }); else H = need;
+    var cv = document.createElement("canvas"); cv.width = W * SC; cv.height = Math.round(H * SC);
+    var c = cv.getContext("2d"); c.scale(SC, SC); c.textBaseline = "alphabetic";
+    c.fillStyle = "#fff"; c.fillRect(0, 0, W, H);
+    c.fillStyle = COL.navy; c.fillRect(0, 0, W, HEAD);
+    c.fillStyle = COL.yel; c.fillRect(0, HEAD, W, 5);
+    rr(c, P, 30, 58, 58, 16); c.fillStyle = COL.yel; c.fill();
+    c.fillStyle = COL.navy; rr(c, P + 14, 45, 30, 7, 3.5); c.fill(); rr(c, P + 14, 56, 21, 7, 3.5); c.fill(); rr(c, P + 14, 67, 26, 7, 3.5); c.fill();
+    c.fillStyle = "#fff"; c.font = "800 34px " + FD; c.fillText("MR Schedule", P + 76, 64);
+    c.fillStyle = "#b8c6d6"; c.font = "500 13px " + FM; c.fillText((D.site.name + " MRI · " + D.scanners.map(function (s) { return s.label; }).join(" · ")).toUpperCase(), P + 77, 87);
+    c.textAlign = "right"; c.fillStyle = COL.yel; c.font = "500 13px " + FM; c.fillText("WEEK OF", W - P, 50);
+    c.fillStyle = "#fff"; c.font = "800 28px " + FD; c.fillText(L.fmtDate(wk, "md") + " – " + L.fmtDate(L.addDays(wk, 4), "md") + ", " + L.parse(wk).getFullYear(), W - P, 84);
+    c.textAlign = "left";
+    var x0 = P + LW, y = HEAD + 19, top;
+    days.forEach(function (o, k) {
+      var x = x0 + k * cw, isT = o.d === today;
+      rr(c, x + 4, y, cw - 8, DH - 10, 10); c.fillStyle = isT ? COL.yel : COL.soft; c.fill();
+      c.fillStyle = COL.ink; c.font = "800 16px " + FD; c.fillText(L.DAYS[L.dow(o.d)], x + 16, y + 24);
+      c.textAlign = "right"; c.fillStyle = isT ? COL.ink : COL.mute; c.font = "500 12px " + FM; c.fillText(L.fmtDate(o.d, "md"), x + cw - 16, y + 23); c.textAlign = "left";
+    });
+    y += DH; top = y;
+    rows.forEach(function (r, ri) {
+      if (ri % 2 === 0) { c.fillStyle = "#f8fafc"; c.fillRect(P, y, W - 2 * P, r.h); }
+      c.strokeStyle = COL.line; c.lineWidth = 1; c.beginPath(); c.moveTo(P, y + .5); c.lineTo(W - P, y + .5); c.stroke();
+      c.fillStyle = COL[r.id] || COL.navy; rr(c, P + 8, y + 15, 6, 22, 3); c.fill();
+      c.fillStyle = COL.ink; c.font = "800 15px " + FD; c.fillText(r.label, P + 23, y + 31);
+      r.cells.forEach(function (cell, k) {
+        var x = x0 + k * cw + 14, yy = y + 12;
+        cell.forEach(function (e) {
+          c.fillStyle = e.color; rr(c, x, yy + 2, 5, e.h - 12, 2.5); c.fill();
+          c.fillStyle = e.bad ? COL.bad : COL.ink; c.font = "700 17px " + FD; c.fillText(fitText(c, e.main, cw - 40), x + 13, yy + 19);
+          c.fillStyle = COL.mute; c.font = "500 12px " + FM;
+          e.subs.forEach(function (s, n) { c.fillText(fitText(c, s, cw - 40), x + 13, yy + 37 + 17 * n); });
+          yy += e.h;
+        });
+      });
+      y += r.h;
+    });
+    c.strokeStyle = COL.line; c.beginPath(); c.moveTo(P, y + .5); c.lineTo(W - P, y + .5);
+    for (i = 0; i < 5; i++) { c.moveTo(Math.round(x0 + i * cw) + .5, top); c.lineTo(Math.round(x0 + i * cw) + .5, y); }
+    c.stroke();
+    c.fillStyle = COL.mute; c.font = "500 11px " + FM; c.fillText("Updated " + stamp() + " · Subject to change", P, H - 20);
+    c.textAlign = "right"; c.fillText("Latest schedule: bbdmrischedule.github.io", W - P, H - 20); c.textAlign = "left";
+    var url = cv.toDataURL("image/png"), file = null;
+    try { var bin = atob(url.split(",")[1]), arr = new Uint8Array(bin.length); for (i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); file = new File([arr], "mr-schedule-" + wk + ".png", { type: "image/png" }); } catch (e) {}
+    return { url: url, file: file };
+  }
+  function getSheet() {
+    var k = S.week + "|" + (D.updated || "") + "|" + X.length + "|" + (document.fonts ? document.fonts.status : "");
+    if (!S.sheet || S.sheet.k !== k) { try { S.sheet = buildSheet(S.week); S.sheet.k = k; } catch (e) { S.sheet = null; return null; } }
+    return S.sheet;
+  }
+  function noPrint() { return typeof window.print !== "function" || navigator.standalone === true; }
+  VIEWS.sheet = function () {
+    var sh = getSheet(), ttl = "Week of " + L.fmtDate(S.week).replace(/^\w+, /, "");
+    return '<div class="weeknav noprint"><button class="btn sm" type="button" data-act="nav" data-v="home">‹ Schedule</button><h2>' + ttl + '</h2><button class="btn sm" type="button" data-act="sheet-step" data-n="-1" aria-label="Previous week">‹</button><button class="btn sm" type="button" data-act="sheet-step" data-n="1" aria-label="Next week">›</button></div>' +
+      '<div class="paper">' + (sh ? '<img id="sheet-img" src="' + sh.url + '" alt="Schedule for the ' + esc(ttl.toLowerCase()) + '">' : "<pre>" + esc(weekText()) + "</pre>") + "</div>" +
+      '<div class="btnrow noprint"><button class="btn primary" type="button" data-act="sheet-print">Print</button><button class="btn" type="button" data-act="sheet-share">Share picture</button><button class="btn" type="button" data-act="sheet-save">Save picture</button><button class="btn" type="button" data-act="sheet-copy">Copy as text</button></div>' +
+      '<p class="note noprint">' + (noPrint() ? "In the home-screen app, Print opens the share sheet. Choose Print there." : "Prints on one landscape page.") + "</p>";
+  };
+  function moreCard() {
+    return '<section class="card tight"><button class="disc" type="button" data-act="fold" data-k="more" aria-expanded="' + !!S.more + '" aria-controls="fold-more"><span><b>More</b><small>Search, print, share</small></span>' + CHEV +
+      '</button><div class="fold' + (S.more ? " open" : "") + '" id="fold-more"><div><div class="in"><form class="search" id="search"><input id="q" class="field" type="search" placeholder="A name or a date, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>' +
+      '<div class="btnrow"><button class="btn primary" type="button" data-act="sheet-open">Print or share the week</button></div></div></div></div></section>';
+  }
+  function copyText(t, msg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { toast(msg); }, function () { toast("Could not copy on this device."); });
+    else toast("Copying is not available here.");
+  }
+  function saveSheet(msg) {
+    var sh = getSheet(); if (!sh) { copyText(weekText(), "Week copied as text."); return; }
+    var a = document.createElement("a"); a.href = sh.url; a.download = "mr-schedule-" + S.week + ".png"; document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+    toast(msg || "Picture saved to your downloads.");
+  }
+  function shareSheet() {
+    var sh = getSheet();
+    try {
+      if (sh && sh.file && navigator.canShare && navigator.canShare({ files: [sh.file] })) { navigator.share({ files: [sh.file], title: "MR Schedule" }).catch(function (e) { if (!e || e.name !== "AbortError") saveSheet(); }); return; }
+      if (navigator.share) { navigator.share({ title: "MR Schedule", text: weekText() }).catch(function () {}); return; }
+    } catch (e) {}
+    saveSheet("This device has no share menu, so the picture was saved to your downloads.");
+  }
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el) return;
+    var act = el.getAttribute("data-act");
+    if (act === "sheet-open") go("sheet");
+    else if (act === "sheet-step") { var n = +el.getAttribute("data-n"); S.week = L.addDays(S.week, 7 * n); S.dir = n < 0 ? "r" : "l"; render(); }
+    else if (act === "sheet-print") {
+      if (noPrint()) { shareSheet(); return; }
+      var st = document.createElement("style"); st.textContent = "@page{size:landscape;margin:8mm}"; document.head.appendChild(st);
+      var done = function () { if (st.parentNode) st.parentNode.removeChild(st); window.removeEventListener("afterprint", done); };
+      window.addEventListener("afterprint", done); setTimeout(done, 60000);
+      try { window.print(); } catch (e) { done(); shareSheet(); }
+    }
+    else if (act === "sheet-share") shareSheet();
+    else if (act === "sheet-save") saveSheet();
+    else if (act === "sheet-copy") copyText(weekText(), "Week copied. Paste it into a message.");
+    else if (act === "print8") { if (noPrint()) toast("To print, open bbdmrischedule.github.io in your browser."); else { try { window.print(); } catch (e) {} } }
+  });
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
   render();
