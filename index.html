@@ -524,6 +524,41 @@ body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none
 @keyframes paperIn{from{opacity:0;transform:perspective(900px) rotateX(14deg) translateY(30px) scale(.96)}}
 .view.still .paper{animation:none!important}
 @media print{.noprint,.toast{display:none!important}.paper{padding:0;border-radius:0;box-shadow:none;animation:none!important}.paper img{border-radius:0;width:100%;max-height:96vh;object-fit:contain}main,.wrap{padding:0!important;max-width:none!important}}
+
+/* ---------- v9: phone form fixes, calmer re-renders, touch polish ---------- */
+html{scroll-behavior:auto;-webkit-text-size-adjust:100%;overflow-x:clip}
+body{overflow-x:clip}
+*{-webkit-tap-highlight-color:transparent}
+button,select,label.check,.btn{touch-action:manipulation}
+body::before{will-change:transform}
+.bar{padding-top:env(safe-area-inset-top)}
+main{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+.toast{bottom:calc(22px + env(safe-area-inset-bottom))}
+.fields>*,.f{min-width:0}
+.fields{align-items:end}
+.field{max-width:100%}
+input.field[type="date"],input.field[type="time"]{-webkit-appearance:none;appearance:none;display:block;width:100%;min-width:0;text-align:left;line-height:38px}
+.wk-row input.field{line-height:36px}
+input.field::-webkit-date-and-time-value{text-align:left;margin:0}
+input.field::-webkit-calendar-picker-indicator{filter:invert(.8);opacity:.8;cursor:pointer}
+:root[data-mode="light"] input.field::-webkit-calendar-picker-indicator{filter:none}
+@media (hover:none){.field,select.field,textarea.field,.note-in{font-size:16px}}
+@media (max-width:720px){.view>.card[style*="max-width"]{max-width:none!important}}
+.check input{-webkit-appearance:none;appearance:none;width:22px;height:22px;flex:none;margin:0;border-radius:7px;border:1.5px solid var(--line2);background:var(--panel2);cursor:pointer;display:grid;place-items:center;transition:background .2s,border-color .2s,transform .2s cubic-bezier(.3,1.6,.5,1)}
+.check input::after{content:"";width:11px;height:6px;margin-top:-2px;border-left:2.5px solid var(--brand-ink);border-bottom:2.5px solid var(--brand-ink);transform:rotate(-45deg) scale(0);transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.check input:checked{background:var(--brand);border-color:var(--brand)}
+.check input:checked::after{transform:rotate(-45deg) scale(1)}
+.check input:active{transform:scale(.86)}
+.check input:focus-visible,.btn:focus-visible,.field:focus-visible,.disc:focus-visible,.strip button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (hover:none){.action:hover{transform:none;border-color:var(--line);background:var(--panel)}.action:hover .ic{transform:none}button.mcell:hover,.day:hover,.tile:hover{transform:none}button.mcell:not(.today):not(.sel):hover,.day:not(.today):hover{border-color:var(--line)}.btn:hover{border-color:var(--line2)}.btn.primary:hover{border-color:var(--cta)}.dayhead:hover{color:inherit}}
+.hero h1{animation:shine 8s linear var(--t,0s) infinite}
+.view.still .hero h1{animation:shine 8s linear var(--t,0s) infinite!important}
+.view.still .day.today{animation-delay:var(--tb,0s)!important}
+.view:is(.dir-l,.dir-r,.soft) :is(.hero .eyebrow,.hero .stamp,.onnow span,.legend span,.rows li,.tile){animation:none}
+.view:is(.dir-l,.dir-r) .strip button{animation:none}
+.view.soft>*{animation:none}
+.view.soft>:is(.week,.month,.dayone,.strip,.msum,#mpanel),.view.soft>.seg~*{animation:fade .4s ease both}
+@media (prefers-reduced-motion:reduce){.hero h1,.view.still .hero h1{animation:none!important}}
 </style>
 </head>
 <body>
@@ -2157,6 +2192,46 @@ function startApp(D) {
     else if (act === "sheet-copy") copyText(weekText(), "Week copied. Paste it into a message.");
     else if (act === "print8") { if (noPrint()) toast("To print, open bbdmrischedule.github.io in your browser."); else { try { window.print(); } catch (e) {} } }
   });
+
+  /* ---------- v9: calmer re-renders ---------- */
+  var animAt = 0, later9 = null, userTick = false;
+  ["click", "change", "input", "submit", "keydown", "touchend"].forEach(function (t) {
+    document.addEventListener(t, function (ev) {
+      userTick = true;
+      if (t === "click") { var e = ev.target.closest && ev.target.closest('[data-act="mode7"],[data-act="asec"],[data-act="kind"],[data-act="dir"]'); if (e) S.soft = true; }
+      setTimeout(function () { userTick = false; S.soft = false; }, 0);
+    }, true);
+  });
+  window.__fresh = function (d) {
+    var same = false, was = STALE || OFFLINE;
+    try { same = JSON.stringify(d) === JSON.stringify(D); } catch (e) {}
+    STALE = null; OFFLINE = false;
+    if (d && d.techs && !same) { D = d; X = D.exceptions; render(); return; }
+    if (was && S.view === "home") { var s = document.querySelector(".hero .stamp"); if (s) s.outerHTML = stampLine(); }
+  };
+  function render() {
+    norm();
+    var key = [S.view, S.mode, S.week, S.month, S.tech, !!S.done, !!S.adminPin, S.req && S.req.kind, S.day, S.mode === "day" ? S.sel : "", S.asec].join("|");
+    var same = key === lastKey && !S.dir;
+    /* A background refresh that lands while the screen is still animating in waits for the animation to finish. */
+    if (same && !userTick && Date.now() - animAt < 950) { if (!later9) later9 = setTimeout(function () { later9 = null; render(); }, 1000); return; }
+    var still = same, soft = !!S.soft && !still; lastKey = key; if (!still) animAt = Date.now();
+    var rs = document.documentElement.style; rs.setProperty("--t", -(Date.now() % 8000) + "ms"); rs.setProperty("--tb", -(Date.now() % 3600) + "ms");
+    var tabs = [["home", "Schedule"], ["request", "Request"], ["admin", "Admin"]], tb = $("tabs");
+    if (!tb.querySelector(".pill")) tb.innerHTML = '<span class="pill"></span>' + tabs.map(function (t) { return '<button type="button" data-act="nav" data-v="' + t[0] + '">' + t[1] + "</button>"; }).join("");
+    var cur = S.view === "pin" ? "request" : S.view === "cancel" || S.view === "day" || S.view === "help" || S.view === "sheet" ? "home" : S.view;
+    [].forEach.call(tb.querySelectorAll("button"), function (b) { if (b.getAttribute("data-v") === cur) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+    placePill();
+    var keepIds = ["fb-text", "q", "s-code", "k-name"], keep = {}, ae = document.activeElement, focusId = ae && keepIds.indexOf(ae.id) >= 0 ? ae.id : "";
+    keepIds.forEach(function (id) { var e = $(id); if (e) keep[id] = e.value; });
+    $("main").innerHTML = '<div class="view' + (still ? " still" : "") + (S.dir ? " dir-" + S.dir : "") + (soft ? " soft" : "") + '">' + (VIEWS[S.view] || vHome)() + "</div>";
+    keepIds.forEach(function (id) { var e = $(id); if (e && keep[id] != null) e.value = keep[id]; });
+    if (focusId && $(focusId)) { try { $(focusId).focus(); } catch (e) {} }
+    S.dir = ""; S.soft = false;
+    placeThumbs(!still);
+    if (S.view === "request") updateOut();
+    if (!still && !soft && S.view === "admin") countUp();
+  }
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
   render();
