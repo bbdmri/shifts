@@ -240,6 +240,63 @@ textarea.field{height:auto;padding:10px 12px;resize:vertical;min-height:64px}
 
 .btn[disabled]{opacity:.55;cursor:default}
 .load{min-height:50vh;display:grid;place-items:center;color:var(--mute)}
+
+/* ---------- v3: stronger color, scanner colors, motion, month view ---------- */
+:root{--bg:#141d29;--panel:#1f2c3c;--panel2:#283a4e;--line:#34475c;--line2:#4d647d;--mute:#b8c6d6;--accent:#ffe14a;--accent-soft:rgba(255,225,74,.16);--brand:#ffe14a;--cta:#ffe14a;--bar:#ffe14a;--track:#31445a;--mr1:#ffe14a;--mr2:#45d9f2;--flt:#b9a4ff;--ca:#f2f5f9;--ok:#5fe3a1;--warn:#ffa24d;--bad:#ff7d72}
+:root[data-mode="light"]{--bg:#eef1f6;--brand:#ffd61f;--cta:#ffd61f;--accent-soft:rgba(255,214,31,.38);--mr1:#e2ad00;--mr2:#0c9ab6;--flt:#6d52e0;--ca:#7a8696}
+body{background:radial-gradient(900px 480px at 100% -8%,rgba(69,217,242,.13),transparent 62%),radial-gradient(760px 460px at -5% 0%,rgba(255,225,74,.10),transparent 58%),var(--bg);background-attachment:fixed}
+.card,.tile,.action{box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 10px 28px rgba(0,0,0,.20)}
+:root[data-mode="light"] .card,:root[data-mode="light"] .tile,:root[data-mode="light"] .action{box-shadow:0 8px 24px rgba(37,49,63,.08)}
+.day.today{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand),0 14px 44px rgba(255,225,74,.16)}
+.tabs button[aria-current="page"],.btn.primary,.seg button[aria-pressed="true"]{box-shadow:0 6px 18px rgba(255,225,74,.30)}
+.dot{animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 7px rgba(255,225,74,0)}}
+.track{height:8px;border-radius:4px;overflow:hidden}
+.track i{border-radius:4px;transform-origin:left center;animation:grow .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*55ms + 140ms)}
+@keyframes grow{from{transform:scaleX(0)}}
+.shift.g-mr1 .track i,.legend i.g-mr1,.grp.g-mr1 i,.pips i.g-mr1{background:var(--mr1)}
+.shift.g-mr2 .track i,.legend i.g-mr2,.grp.g-mr2 i,.pips i.g-mr2{background:var(--mr2)}
+.shift.g-float .track i,.legend i.g-float,.grp.g-float i,.pips i.g-float{background:var(--flt)}
+.shift.g-ca .track i,.legend i.g-ca,.grp.g-ca i,.pips i.g-ca{background:var(--ca)}
+.shift.changed .track i{background:var(--warn)}
+.grp{display:flex;align-items:center;gap:6px;margin-top:4px;font:600 10.5px/1.4 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.grp:first-child{margin-top:0}
+.grp i,.legend i{width:8px;height:8px;border-radius:50%;flex:none}
+.legend{display:flex;gap:6px 16px;flex-wrap:wrap;font:500 12px var(--f-mono);color:var(--mute);margin-top:-8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.seg.mini{padding:3px;border-radius:10px}
+.seg.mini button{flex:none;min-height:28px;padding:0 11px;font-size:13px;border-radius:7px}
+.month{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.mhead{font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);text-align:center}
+.mcell{position:relative;min-height:78px;min-width:0;border-radius:12px;border:1px solid var(--line);background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;cursor:pointer;color:var(--fg);font:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.mcell.out{border:0;background:transparent;box-shadow:none;cursor:default;min-height:0}
+.mcell b{font:700 15px var(--f-display)}
+.mcell.today{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+button.mcell:hover{border-color:var(--brand);transform:translateY(-2px)}
+.mcell u{position:absolute;top:10px;right:9px;width:9px;height:9px;border-radius:50%}
+.mcell u.bad{background:var(--bad)}
+.mcell u.warn{background:var(--warn)}
+.mcell.chg b::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--warn);margin-left:5px;vertical-align:middle}
+.pips{display:flex;flex-wrap:wrap;gap:3px}
+.pips i{width:8px;height:8px;border-radius:50%}
+.mh{font:500 11px/1.35 var(--f-mono)}
+.mh.off{color:var(--mute)}
+.btn,.action,.mcell,.tabs button,.seg button,.iconbtn{transition:transform .18s cubic-bezier(.2,.8,.2,1),background .22s,border-color .22s,box-shadow .22s,color .22s}
+.btn:active,.action:active,button.mcell:active,.tabs button:active,.iconbtn:active{transform:scale(.95)}
+.view{animation:none}
+.view>*{animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+.view>*:nth-child(2){animation-delay:40ms}.view>*:nth-child(3){animation-delay:80ms}.view>*:nth-child(4){animation-delay:120ms}.view>*:nth-child(5){animation-delay:160ms}.view>*:nth-child(n+6){animation-delay:200ms}
+.week .day,.month .mcell{animation:rise .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*45ms + 90ms)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes slideL{from{opacity:0;transform:translateX(44px)}}
+@keyframes slideR{from{opacity:0;transform:translateX(-44px)}}
+.view.dir-l>*,.view.dir-r>*,.view.dir-l .day,.view.dir-r .day,.view.dir-l .mcell,.view.dir-r .mcell{animation:none}
+.view.dir-l .week,.view.dir-l .month{animation:slideL .42s cubic-bezier(.2,.8,.2,1) both}
+.view.dir-r .week,.view.dir-r .month{animation:slideR .42s cubic-bezier(.2,.8,.2,1) both}
+.view.still,.view.still *{animation:none!important}
+.chip{transition:background .2s,color .2s}
+.flag{animation:rise .45s cubic-bezier(.2,.8,.2,1) both}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
 <body>
@@ -335,18 +392,20 @@ textarea.field{height:auto;padding:10px 12px;resize:vertical;min-height:64px}
       });
     shifts.sort(function (a, b) { return a.start - b.start || a.end - b.end || (a.tech < b.tech ? -1 : 1); });
 
-    var flags = [], bx = [];
+    var flags = [], bx = [], hasCa = data.techs.some(function (p) { return p.ca; });
     if (hrs && data.bx.days.indexOf(w) >= 0) {
       bx = data.bx.slots.map(function (t) {
         var by = shifts.filter(function (sh) { return person(data, sh.tech).bx && sh.start <= t && sh.end > t; })
           .map(function (sh) { return sh.tech; });
         if (!by.length) flags.push({ level: "bad", text: "No biopsy tech on site for the " + fmtTime(t) + " biopsy" });
-        return { time: t, by: by };
+        var ca = shifts.filter(function (sh) { return person(data, sh.tech).ca && sh.start <= t && sh.end > t; }).map(function (sh) { return sh.tech; });
+        if (hasCa && !ca.length) flags.push({ level: "bad", text: "No clinical assistant on site for the " + fmtTime(t) + " biopsy" });
+        return { time: t, by: by, ca: ca };
       });
     }
     if (hrs) {
       var cur = hrs[0];
-      shifts.slice().sort(function (a, b) { return a.start - b.start; }).forEach(function (sh) {
+      shifts.filter(function (sh) { return !person(data, sh.tech).ca; }).sort(function (a, b) { return a.start - b.start; }).forEach(function (sh) {
         if (sh.start > cur) flags.push({ level: "warn", text: "No tech scheduled " + fmtRange(cur, Math.min(sh.start, hrs[1])) });
         cur = Math.max(cur, sh.end);
       });
@@ -652,7 +711,7 @@ function startApp(D) {
       if (!r.allDay) h += timeFields(r);
     } else {
       h += '<div class="seg" role="group" aria-label="Who is covering"><button type="button" data-act="dir" data-v="need" aria-pressed="' + (r.dir === "need") + '">Someone covers me</button><button type="button" data-act="dir" data-v="cover" aria-pressed="' + (r.dir === "cover") + '">I cover someone</button></div>' +
-        '<div class="fields"><label class="f" for="r-other">' + (r.dir === "need" ? "Who covers you" : "Whose shift") + '<select id="r-other" class="field"><option value="">Choose</option>' + techOptions(r.other, S.who) + "</select></label>" +
+        '<div class="fields"><label class="f" for="r-other">' + (r.dir === "need" ? "Who covers you" : "Whose shift") + '<select id="r-other" class="field"><option value="">Choose</option>' + techOptions(r.other, S.who, true) + "</select></label>" +
         '<label class="f" for="r-date">Date<input id="r-date" class="field" type="date" min="' + today + '" value="' + r.date + '"></label></div>' + timeFields(r);
     }
     h += '<label class="f" for="r-pin" style="max-width:200px">Your PIN<input id="r-pin" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" value="' + esc(r.pin || "") + '"></label>';
@@ -703,7 +762,7 @@ function startApp(D) {
     var plan = L.dayPlan(D, X, today), flags = L.upcomingFlags(D, X, today, 14), open = L.openShifts(D, X, today);
     var pend = feed().filter(function (x) { return x.status === "pending"; });
     var bad = flags.filter(function (f) { return f.level === "bad"; }).length;
-    var onsite = {}; plan.shifts.forEach(function (s) { onsite[s.tech] = 1; });
+    var onsite = {}; plan.shifts.forEach(function (s) { if (!L.person(D, s.tech).ca) onsite[s.tech] = 1; });
     function tile(n, label, k) { return '<div class="tile ' + (n && k ? k : "") + '"><p class="eyebrow">' + label + "</p><b>" + n + "</b></div>"; }
     var h = head + '<div class="tiles">' + tile(Object.keys(onsite).length, "Techs today") + tile(bad, "Red flags", "bad") + tile(flags.length - bad, "Coverage gaps", "warn") + tile(pend.length, "Pending", "warn") + tile(open.length, "Open shifts", "warn") + "</div>";
     if (S.err) h += '<div class="flag bad">' + IC.alert + "<div><b>" + esc(S.err) + "</b></div></div>";
@@ -714,7 +773,7 @@ function startApp(D) {
     for (var i = 0, n = 0; i < 21 && n < 8; i++) {
       var d = L.addDays(today, i), p = L.dayPlan(D, X, d);
       if (!p.bx.length) continue; n++;
-      rows += "<tr><td>" + L.fmtDate(d, "short") + "</td>" + p.bx.map(function (b) { return "<td>" + (b.by.length ? esc(b.by.map(name).join(", ")) : chip("Nobody", "bad")) + "</td>"; }).join("") + "</tr>";
+      rows += "<tr><td>" + L.fmtDate(d, "short") + "</td>" + p.bx.map(function (b) { return "<td>" + (b.by.length ? esc(b.by.map(name).join(", ")) : chip("No tech", "bad")) + " \u00b7 " + (b.ca && b.ca.length ? esc(b.ca.map(name).join(", ")) : chip("No assistant", "bad")) + "</td>"; }).join("") + "</tr>";
     }
     h += '<section class="card"><header><h2>Biopsy coverage</h2><span class="mono small mute">' + esc(D.bx.scanner) + '</span></header><div class="scroll"><table class="bxgrid"><thead><tr><th>Day</th>' +
       D.bx.slots.map(function (t) { return "<th>" + L.fmtTime(t) + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div></section>";
@@ -791,6 +850,125 @@ function startApp(D) {
   /* Keep the schedule fresh while it is on screen. */
   setInterval(function () { var t = L.ymd(new Date()); if (t !== today) { today = t; S.week = startWeek(); } if (S.view === "home" && !document.hidden) reload(); }, 300000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && S.view === "home") reload(); });
+
+  /* ---------- v3: scanner groups, clinical assistants, month view, motion ---------- */
+  var GROUPS = [{ id: "mr1", label: "MR1" }, { id: "mr2", label: "MR2" }, { id: "float", label: "Float" }, { id: "ca", label: "Clinical assistants" }];
+  function groupOf(sh) { if (L.person(D, sh.tech).ca) return "ca"; var s = String(sh.scanner || "").toLowerCase(); return s === "mr1" ? "mr1" : s === "mr2" ? "mr2" : "float"; }
+  function shiftRow(sh) {
+    var c = "";
+    if (sh.scanner && S.tech) c += chip(sh.scanner);
+    if (sh.coverFor) c += chip("For " + name(sh.coverFor), "ok");
+    else if (sh.changed) c += chip("Changed", "warn");
+    return '<li class="shift g-' + groupOf(sh) + (sh.tech === S.who ? " me" : "") + (sh.changed ? " changed" : "") + '"><div class="who"><b>' + esc(name(sh.tech)) + "</b>" + c +
+      '</div><div class="hrs">' + L.fmtRange(sh.start, sh.end) + "</div>" + track(sh.start, sh.end) + "</li>";
+  }
+  function dayBody(plan, filter) {
+    if (!plan.hours) return '<p class="empty">Closed</p>';
+    var h = filter ? "" : flagsHtml(plan.flags), rows = "";
+    var list = plan.shifts.filter(function (s) { return !filter || s.tech === filter; });
+    GROUPS.forEach(function (g) {
+      var part = list.filter(function (s) { return groupOf(s) === g.id; });
+      if (part.length) rows += (filter ? "" : '<li class="grp g-' + g.id + '"><i></i>' + g.label + "</li>") + part.map(shiftRow).join("");
+    });
+    if (!filter) rows += plan.open.map(function (o) { return openRow(o, plan.date); }).join("");
+    if (rows) h += '<ul class="shifts">' + rows + "</ul>";
+    else h += '<p class="empty">' + (filter ? (plan.off.some(function (o) { return o.tech === filter; }) ? "Off" : "Not scheduled") : "Nobody scheduled") + "</p>";
+    plan.pending.forEach(function (x) {
+      if (filter && x.tech !== filter && x.coverBy !== filter) return;
+      h += '<p class="note">' + chip("Pending", "warn") + " " + esc(L.describe(D, x).title) + "</p>";
+    });
+    return h;
+  }
+  function techOptions(sel, skip, same) {
+    var mine = !!L.person(D, S.who).ca;
+    return D.techs.filter(function (t) { return t.id !== skip && (!same || !S.who || !!t.ca === mine); }).map(function (t) { return '<option value="' + esc(t.id) + '"' + (sel === t.id ? " selected" : "") + ">" + esc(t.name) + "</option>"; }).join("");
+  }
+  function monthStart(d) { return d.slice(0, 8) + "01"; }
+  function shortRange(s, e) {
+    function t(m) { var h = Math.floor(m / 60), mi = m % 60; return (h % 12 || 12) + (mi ? ":" + (mi < 10 ? "0" : "") + mi : "") + (h >= 12 ? "p" : "a"); }
+    return t(s) + "–" + t(e);
+  }
+  function monthCell(day, i) {
+    var plan = L.dayPlan(D, X, day), list = plan.shifts.filter(function (s) { return !S.tech || s.tech === S.tech; });
+    var bad = plan.flags.some(function (f) { return f.level === "bad"; });
+    var chg = plan.shifts.some(function (s) { return s.changed && (!S.tech || s.tech === S.tech); }) || (!S.tech && (plan.open.length || plan.pending.length));
+    var body;
+    if (S.tech) body = list.length ? list.map(function (s) { return '<span class="mh">' + shortRange(s.start, s.end) + "</span>"; }).join("") : '<span class="mh off">' + (plan.off.some(function (o) { return o.tech === S.tech; }) ? "Off" : "–") + "</span>";
+    else body = '<span class="pips">' + list.map(function (s) { return '<i class="g-' + groupOf(s) + '"></i>'; }).join("") + "</span>";
+    var mark = S.tech || !plan.flags.length ? "" : '<u class="' + (bad ? "bad" : "warn") + '"></u>';
+    return '<button type="button" class="mcell' + (day === today ? " today" : "") + (chg ? " chg" : "") + '" style="--i:' + i + '" data-act="day" data-d="' + day + '" aria-label="' + L.fmtDate(day, "long") + '"><b>' + L.parse(day).getDate() + "</b>" + mark + body + "</button>";
+  }
+  function monthGrid(first) {
+    var m = L.parse(first).getMonth(), h = '<div class="month">' + ["Mon", "Tue", "Wed", "Thu", "Fri"].map(function (d) { return '<div class="mhead">' + d + "</div>"; }).join(""), n = 0;
+    for (var w = 0; w < 6; w++) {
+      var wk = L.addDays(L.monday(first), w * 7), any = false, row = "";
+      for (var i = 0; i < 5; i++) {
+        var day = L.addDays(wk, i), inM = L.parse(day).getMonth() === m;
+        if (inM) any = true;
+        row += inM ? monthCell(day, n++) : '<div class="mcell out"></div>';
+      }
+      if (any) h += row;
+    }
+    return h + "</div>";
+  }
+  function vHome() {
+    var month = S.mode === "month", ms = S.month || monthStart(today), md = L.parse(ms);
+    var h = '<section class="hero"><p class="eyebrow">' + esc(D.site.name) + " MRI · " + D.scanners.map(function (s) { return esc(s.label); }).join(" · ") +
+      "</p><h1>" + L.fmtDate(today, "long") + '</h1><p class="stamp"><span class="dot"></span>Schedule last updated ' + esc(stamp()) + "</p></section>";
+    h += '<div class="weeknav"><h2>' + (month ? L.MONTHS[md.getMonth()] + " " + md.getFullYear() : "Week of " + L.fmtDate(S.week).replace(/^\w+, /, "")) +
+      (S.tech ? " · " + esc(name(S.tech)) + ' <button class="linkbtn" type="button" data-act="clear">Show everyone</button>' : "") + "</h2>" +
+      '<div class="seg mini" role="group" aria-label="View"><button type="button" data-act="mode" data-v="week" aria-pressed="' + !month + '">Week</button><button type="button" data-act="mode" data-v="month" aria-pressed="' + month + '">Month</button></div>' +
+      '<button class="btn sm" type="button" data-act="step" data-n="-1" aria-label="Previous">‹</button>' +
+      '<button class="btn sm" type="button" data-act="step" data-n="0">Today</button>' +
+      '<button class="btn sm" type="button" data-act="step" data-n="1" aria-label="Next">›</button></div>';
+    h += '<div class="legend">' + GROUPS.map(function (g) { return '<span><i class="g-' + g.id + '"></i>' + g.label + "</span>"; }).join("") + "</div>";
+    if (month) h += monthGrid(ms);
+    else {
+      h += '<div class="week">';
+      for (var i = 0; i < 5; i++) {
+        var d = L.addDays(S.week, i), plan = L.dayPlan(D, X, d), dt = L.parse(d);
+        h += '<article class="card day' + (d === today ? " today" : "") + '" style="--i:' + i + '"><header><h3>' + L.DAYS[dt.getDay()].slice(0, 3) + " <span>" + L.fmtDate(d, "md") + "</span></h3>" +
+          (d === today ? chip("Today") : "") + "</header>" + dayBody(plan, S.tech) + "</article>";
+      }
+      h += "</div>";
+    }
+    h += '<form class="search" id="search"><input id="q" class="field" type="search" placeholder="Find a week or a person, like Tracy 3/8/2027" aria-label="Search by name or date" autocomplete="off"><button class="btn" type="submit">Search</button></form>';
+    if (S.msg) h += '<p class="note" role="status">' + esc(S.msg) + "</p>";
+    h += '<div class="actions">' +
+      '<button class="action" type="button" data-act="go-req" data-kind="off"><span class="ic">' + IC.cal + "</span><span><b>Request time off</b><small>Pick your days and send.</small></span></button>" +
+      '<button class="action" type="button" data-act="go-req" data-kind="cover"><span class="ic">' + IC.swap + "</span><span><b>Report a shift cover</b><small>Say who is working for whom.</small></span></button></div>";
+    var f = feed();
+    h += '<section class="card"><header><h2>Upcoming changes</h2></header>' +
+      (f.length ? '<ul class="rows">' + f.map(function (x) { return changeRow(x); }).join("") + "</ul>" : '<p class="empty">None. Everyone is on the normal schedule.</p>') + "</section>";
+    return h + footer();
+  }
+  var lastKey = "";
+  function render() {
+    var key = [S.view, S.mode, S.week, S.month, S.tech, !!S.done, !!S.adminPin, S.req && S.req.kind].join("|");
+    var still = key === lastKey && !S.dir; lastKey = key;
+    var tabs = [["home", "Schedule"], ["request", "Request"], ["admin", "Admin"]];
+    $("tabs").innerHTML = tabs.map(function (t) { return '<button type="button" data-act="nav" data-v="' + t[0] + '"' + (S.view === t[0] ? ' aria-current="page"' : "") + ">" + t[1] + "</button>"; }).join("");
+    $("main").innerHTML = '<div class="view' + (still ? " still" : "") + (S.dir ? " dir-" + S.dir : "") + '">' + (VIEWS[S.view] || vHome)() + "</div>";
+    S.dir = "";
+    if (S.view === "request") updateOut();
+  }
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el) return;
+    var act = el.getAttribute("data-act");
+    if (act === "mode") {
+      var v = el.getAttribute("data-v"); if (v === (S.mode || "week")) return;
+      if (v === "month") S.month = monthStart(S.week);
+      else { var f = S.month || monthStart(today), w = L.dow(f); S.week = f === monthStart(today) ? startWeek() : L.monday(L.addDays(f, w === 6 ? 2 : w === 0 ? 1 : 0)); }
+      S.mode = v; S.msg = ""; render();
+    } else if (act === "day") { S.mode = "week"; S.week = L.monday(el.getAttribute("data-d")); S.msg = ""; render(); window.scrollTo(0, 0); }
+    else if (act === "step") {
+      var n = +el.getAttribute("data-n");
+      if (S.mode === "month") { var m = L.parse(S.month || monthStart(today)); S.month = n ? L.ymd(new Date(m.getFullYear(), m.getMonth() + n, 1)) : monthStart(today); }
+      else S.week = n ? L.addDays(S.week, 7 * n) : startWeek();
+      S.dir = n < 0 ? "r" : n > 0 ? "l" : ""; S.msg = ""; render();
+    }
+  });
+  document.addEventListener("submit", function (ev) { if (ev.target.id === "search" && S.mode === "month") { S.month = monthStart(S.week); render(); } });
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
   render();
