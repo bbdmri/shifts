@@ -33,6 +33,9 @@
     return o;
   }
   window.google = { script: { run: runner() } };
+  /* iPhone and iPad zoom the page when a field is tapped; this stops it without blocking pinch zoom there. */
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) { var vp = document.querySelector('meta[name="viewport"]'); if (vp) vp.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1"); }
+
   /* Saved copy, team passcode screen and offline support. */
   function lockScreen(msg) {
     var main = document.getElementById("main"), tabs = document.getElementById("tabs");
@@ -46,12 +49,13 @@
       window.__started = true; lockScreen(had ? "That passcode is not right." : ""); return;
     }
     if (window.__started) { if (window.__offline) window.__offline(); return; }
-    var l = document.getElementById("load"); if (l) l.textContent = "Could not load the schedule. Check your connection and reload.";
+    window.__failed = true; var l = document.getElementById("load"); if (l) l.textContent = "Could not load the schedule. Check your connection and reload.";
   };
   if (!DECIDE) document.addEventListener("DOMContentLoaded", function () {
     var c = null; try { c = JSON.parse(localStorage.getItem("bbd.cache") || "null"); } catch (e) {}
-    if (c && c.d && c.d.techs && !window.__started && typeof startApp === "function") { window.__started = true; window.__stale = c.t; startApp(c.d); }
+    if (c && c.d && c.d.techs && !window.__started && typeof startApp === "function") { window.__started = true; window.__stale = c.t; startApp(c.d); if (window.__failed && window.__offline) window.__offline(); }
   });
+  window.addEventListener("online", function () { if (!window.__started) location.reload(); });
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {});
 
 
@@ -559,6 +563,10 @@ input.field::-webkit-calendar-picker-indicator{filter:invert(.8);opacity:.8;curs
 .view.soft>*{animation:none}
 .view.soft>:is(.week,.month,.dayone,.strip,.msum,#mpanel),.view.soft>.seg~*{animation:fade .4s ease both}
 @media (prefers-reduced-motion:reduce){.hero h1,.view.still .hero h1{animation:none!important}}
+
+/* ---------- v10: no zoom on focus, bigger touch targets ---------- */
+@media (hover:none){input,select,textarea,label.f .field,label.f textarea,.note-in{font-size:16px!important}.seg.mini button{min-height:36px;padding:0 13px}.btn.sm{min-height:38px}.linkbtn{padding:9px 0;min-height:38px}}
+@supports (-webkit-touch-callout:none){input,select,textarea,label.f .field,label.f textarea,.note-in{font-size:16px!important}}
 </style>
 </head>
 <body>
@@ -1437,7 +1445,7 @@ function startApp(D) {
       if (document.startViewTransition && !REDUCED) {
         root.classList.add("theming");
         var off = function () { root.classList.remove("theming"); };
-        try { document.startViewTransition(flip).finished.then(off, off); } catch (e) { flip(); off(); }
+        try { var tt = document.startViewTransition(flip); if (tt.ready) tt.ready.catch(function () {}); tt.finished.then(off, off); } catch (e) { flip(); off(); }
       } else flip();
     }
     else if (act === "cancel-open") { S.cancel = { id: el.getAttribute("data-id"), msg: "", ok: false }; go("cancel"); }
@@ -1645,7 +1653,7 @@ function startApp(D) {
     if (!isPerson(S.who)) return { err: "Choose your name." };
     if (!r.date) return { err: "Pick a date." };
     if (r.kind === "swap") {
-      if (!r.other || r.other === S.who) return { err: "Choose who you are swapping with." };
+      if (!r.other || r.other === S.who || !!L.person(D, r.other).ca !== !!L.person(D, S.who).ca) return { err: "Choose who you are swapping with." };
       if (!r.date2) return { err: "Pick the date of their shift." };
       if (!pinOk) return { err: "Enter your 4-digit PIN." };
       return { req: { type: "swap", tech: S.who, coverBy: r.other, date: r.date, date2: r.date2 }, fn: "submitSwap", send: { sender: S.who, pin: r.pin, other: r.other, date: r.date, date2: r.date2 } };
@@ -1658,7 +1666,7 @@ function startApp(D) {
       if (r.repeat) o.repeat = "weekly";
       if (!r.allDay) { if (!(e > s)) return { err: "The end time must be after the start time." }; o.start = s; o.end = e; }
     } else {
-      if (!r.other || r.other === S.who) return { err: "Choose the other person." };
+      if (!r.other || r.other === S.who || !!L.person(D, r.other).ca !== !!L.person(D, S.who).ca) return { err: "Choose the other person." };
       if (!(e > s)) return { err: "The end time must be after the start time." };
       o = { type: "cover", tech: r.dir === "need" ? S.who : r.other, coverBy: r.dir === "need" ? r.other : S.who, date: r.date, dateTo: null, start: s, end: e };
     }
@@ -1784,7 +1792,7 @@ function startApp(D) {
     }
     else if (act === "send2") {
       var res = reqObj(); if (res.err || S.busy) return;
-      S.err = ""; call(res.fn, res.send, function (r) { if (!r.ok) { S.err = r.err; S.req.pin = ""; render(); return; } S.done = r; S.req = null; reload(); });
+      S.err = ""; call(res.fn, res.send, function (r) { if (!r.ok) { S.err = r.err; if (/PIN/i.test(r.err || "")) S.req.pin = ""; render(); return; } S.done = r; S.req = null; reload(); });
       updateOut();
     }
     else if (act === "decide2") {
@@ -2231,6 +2239,108 @@ function startApp(D) {
     placeThumbs(!still);
     if (S.view === "request") updateOut();
     if (!still && !soft && S.view === "admin") countUp();
+  }
+
+  /* ---------- v10: request checks, instant answers, foreground refresh ---------- */
+  function vt(fn) {
+    if (document.startViewTransition && !REDUCED && !document.hidden) {
+      try { var t = document.startViewTransition(fn), no = function () {}; if (t && t.ready) t.ready.catch(no); if (t && t.finished) t.finished.catch(no); if (t && t.updateCallbackDone) t.updateCallbackDone.catch(no); return; } catch (e) {}
+    }
+    fn();
+  }
+  function now9() { userTick = true; setTimeout(function () { userTick = false; }, 0); }
+  function relock() { try { localStorage.removeItem("bbd.cache"); } catch (x) {} location.reload(); }
+  var lastFetch = Date.now();
+  function call(fn, arg, done) {
+    S.busy = true;
+    function fin(r) { S.busy = false; now9(); done(r); }
+    google.script.run.withSuccessHandler(function (r) { fin(r || { ok: false, err: "No answer from the schedule." }); })
+      .withFailureHandler(function (e) { if (e && e.message === "LOCKED") { relock(); return; } fin({ ok: false, err: "Could not reach the schedule. Check your connection and try again." }); })[fn](arg);
+  }
+  function reload(then) {
+    lastFetch = Date.now();
+    google.script.run.withSuccessHandler(function (d) { if (d && d.techs) { D = d; X = D.exceptions; STALE = null; OFFLINE = false; } now9(); if (then) then(); render(); })
+      .withFailureHandler(function (e) { if (e && e.message === "LOCKED") { relock(); return; } OFFLINE = true; now9(); if (then) then(); render(); }).getData();
+  }
+  function wake() {
+    if (document.hidden || S.busy) return;
+    var quiet = S.view === "home" || S.view === "day" || S.view === "sheet" || S.view === "help";
+    if (L.ymd(new Date()) !== today) { if (quiet) location.reload(); return; }
+    if (!quiet || (!OFFLINE && Date.now() - lastFetch < 60000)) return;
+    lastFetch = Date.now();
+    google.script.run.withSuccessHandler(function (d) { window.__fresh(d); }).withFailureHandler(function () {}).getData();
+  }
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("focus", wake);
+  window.addEventListener("online", wake);
+  setInterval(function () { if (Date.now() - lastFetch > 300000 || L.ymd(new Date()) !== today) wake(); }, 60000);
+  function closuresCard() {
+    var list = (D.closures || []).filter(function (c) { return (c.dateTo || c.date) >= today; });
+    return '<section class="card form"><header><h2>Closed days</h2></header>' + (list.length ? '<ul class="rows">' + list.map(function (c) {
+      var row = +c.row || 0;
+      return '<li><div class="t">' + esc(c.name) + '</div><div class="d">' + L.fmtDate(c.date, "short") + (c.dateTo ? " to " + L.fmtDate(c.dateTo, "short") : "") + '</div><div><button class="linkbtn" type="button" data-act="clo-ask" data-row="' + row + '">' + (S.cloAsk === row ? "Tap again to remove" : "Remove") + "</button></div></li>";
+    }).join("") + "</ul>" : '<p class="empty">None entered.</p>') +
+      '<div class="fields"><label class="f" for="k-date">First day<input id="k-date" class="field" type="date"></label><label class="f" for="k-to">Last day (optional)<input id="k-to" class="field" type="date"></label><label class="f" for="k-name">Name<input id="k-name" class="field" maxlength="60" placeholder="Thanksgiving"></label></div>' + msgLine(S.cloMsg) +
+      '<div><button class="btn" type="button" data-act="clo-add"' + (S.busy ? " disabled" : "") + ">Add closed day</button></div></section>";
+  }
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest('[data-act="clo-ask"]'); if (!el || S.busy) return;
+    var row = +el.getAttribute("data-row");
+    if (S.cloAsk !== row) { S.cloAsk = row; render(); return; }
+    S.cloAsk = null;
+    call("adminClosure", { pin: S.adminPin, remove: row }, function (r) { S.cloMsg = r.ok ? r.msg : r.err; adminRefresh(); reload(); });
+    render();
+  });
+  function fitTimes(r) {
+    var owner = r.dir === "need" ? S.who : r.other;
+    if (!owner || !r.date) return;
+    var p = L.dayPlan(D, X, r.date), op = p.open.filter(function (o) { return o.tech === owner; })[0], mine = p.shifts.filter(function (x) { return x.tech === owner; });
+    if (r.dir === "cover" && op) { r.start = toHM(op.start); r.end = toHM(op.end); }
+    else if (mine.length) { r.start = toHM(mine[0].start); r.end = toHM(mine[0].end); }
+  }
+  function shiftsOn(t, d) { return L.dayPlan(D, X, d).shifts.filter(function (s) { return s.tech === t; }); }
+  function closedMsg(d) { return L.dayPlan(D, X, d).hours ? "" : D.site.name + " is closed on " + L.fmtDate(d, "short") + "."; }
+  function reqObj() {
+    var r = S.req, o, s = toMin(r.start), e = toMin(r.end), pinOk = /^\d{4}$/.test(r.pin || "");
+    function day(d) { return L.fmtDate(d, "short"); }
+    if (!isPerson(S.who)) return { err: "Choose your name." };
+    if (!r.date) return { err: "Pick a date." };
+    if (r.date < today) return { err: "That date has passed." };
+    if (closedMsg(r.date)) return { err: closedMsg(r.date) };
+    if (r.kind === "swap") {
+      if (!r.other || r.other === S.who || !!L.person(D, r.other).ca !== !!L.person(D, S.who).ca) return { err: "Choose who you are swapping with." };
+      if (!r.date2) return { err: "Pick the date of their shift." };
+      if (r.date2 < today) return { err: "That date has passed." };
+      if (closedMsg(r.date2)) return { err: closedMsg(r.date2) };
+      if (!shiftsOn(S.who, r.date).length) return { err: "You have no shift on " + day(r.date) + " to swap." };
+      if (!shiftsOn(r.other, r.date2).length) return { err: name(r.other) + " has no shift on " + day(r.date2) + " to swap." };
+      if (r.date !== r.date2) {
+        if (shiftsOn(r.other, r.date).length) return { err: name(r.other) + " already works " + day(r.date) + ". Pick a day they are off, or the same day to trade shifts." };
+        if (shiftsOn(S.who, r.date2).length) return { err: "You already work " + day(r.date2) + ". Pick a day you are off, or the same day to trade shifts." };
+      }
+      if (!pinOk) return { err: "Enter your 4-digit PIN." };
+      return { req: { type: "swap", tech: S.who, coverBy: r.other, date: r.date, date2: r.date2 }, fn: "submitSwap", send: { sender: S.who, pin: r.pin, other: r.other, date: r.date, date2: r.date2 } };
+    }
+    if (r.kind === "off") {
+      if (r.repeat && !r.dateTo) return { err: "Pick the date the repeat ends." };
+      if (r.dateTo && r.dateTo < r.date) return { err: "The last day is before the first day." };
+      if (r.dateTo && L.addDays(r.date, r.repeat ? 183 : 60) < r.dateTo) return { err: r.repeat ? "Keep a repeat to 6 months or less." : "Keep one request to 60 days or less." };
+      if ((!r.dateTo || r.dateTo === r.date) && !shiftsOn(S.who, r.date).length) return { err: "You are not on the schedule on " + day(r.date) + "." };
+      o = { type: "off", tech: S.who, date: r.date, dateTo: r.dateTo && r.dateTo !== r.date ? r.dateTo : null, start: null, end: null };
+      if (r.repeat) o.repeat = "weekly";
+      if (!r.allDay) { if (!(e > s)) return { err: "The end time must be after the start time." }; o.start = s; o.end = e; }
+    } else {
+      if (!r.other || r.other === S.who || !!L.person(D, r.other).ca !== !!L.person(D, S.who).ca) return { err: "Choose the other person." };
+      if (!(e > s)) return { err: "The end time must be after the start time." };
+      var owner = r.dir === "need" ? S.who : r.other, cov = r.dir === "need" ? r.other : S.who;
+      if (!shiftsOn(owner, r.date).length && !L.dayPlan(D, X, r.date).open.some(function (x) { return x.tech === owner; })) return { err: (owner === S.who ? "You have" : name(owner) + " has") + " no shift on " + day(r.date) + "." };
+      var clash = shiftsOn(cov, r.date).filter(function (x) { return x.start < e && x.end > s; })[0];
+      if (clash) return { err: (cov === S.who ? "You are" : name(cov) + " is") + " already working " + L.fmtRange(clash.start, clash.end) + " that day." };
+      o = { type: "cover", tech: owner, coverBy: cov, date: r.date, dateTo: null, start: s, end: e };
+    }
+    if (!pinOk) return { err: "Enter your 4-digit PIN." };
+    o.sender = S.who; o.pin = r.pin;
+    return { req: o, fn: "submitRequest", send: o };
   }
 
   if (store.get("mode") === "light") document.documentElement.setAttribute("data-mode", "light");
